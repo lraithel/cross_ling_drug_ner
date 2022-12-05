@@ -532,7 +532,7 @@ class Brat(datasets.GeneratorBasedBuilder):
             "notes": [],
         }
 
-        with open(filename) as file:
+        with open(filename, "r", encoding="utf-8") as file:
             for i, line in enumerate(file):
                 if len(line.strip()) == 0:
                     continue
@@ -655,7 +655,7 @@ class Brat(datasets.GeneratorBasedBuilder):
 
             txt_fn = f"{files_without_ext[i]}.{self.config.txt_file_extension}"
 
-            with open(txt_fn, "r") as read_handle:
+            with open(txt_fn, "r", encoding="utf-8") as read_handle:
                 txt_content = read_handle.read()
 
             # don't need that anymore, this is done by the brat dataloader

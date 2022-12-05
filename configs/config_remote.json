@@ -1,13 +1,13 @@
 {
-  "data_url": "/netscratch/raithel/projects/cross_ling_drug_detection/converted",
-  "test": "test_test",
-  "train": "train_test",
-  "dev": "dev_test",
+  "data_url": "/netscratch/raithel/projects/cross_ling_drug_ner/converted/",
+  "test": "test",
+  "train": "train",
+  "dev": "dev",
   "epochs": 100,
   "patience": 4,
   "use_wandb": true,
   "debug": false,
   "out_dir": "/netscratch/raithel/projects/cross_ling_drug_detection/models/",
-  "unify_tags": true
-
+  "unify_tags": true,
+  "seed": 42
 }

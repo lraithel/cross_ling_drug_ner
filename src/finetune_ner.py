@@ -223,8 +223,8 @@ class DrugNER(object):
             output_dir=out_dir,
             evaluation_strategy="steps",
             save_strategy="steps",
-            eval_steps=20,  # 500
-            save_steps=20,
+            eval_steps=500,  # 500
+            save_steps=500,
             learning_rate=self.config["learning_rate"],
             per_device_train_batch_size=self.config["batch_size"],
             per_device_eval_batch_size=self.config["batch_size"],
