@@ -1,0 +1,18 @@
+{
+  "batch_size": 6,
+  "chunk_sentences": true,
+  "data_url": "data/converted",
+  "debug": true,
+  "dev": "dev_test",
+  "epochs": 100,
+  "learning_rate": 0.0002,
+  "model_name": "xlm-roberta-base",
+  "num_sentences": 5,
+  "out_dir": "outputs",
+  "patience": 4,
+  "seed": 42,
+  "test": "test_test",
+  "train": "train_test",
+  "unify_tags": true,
+  "use_wandb": false
+}
