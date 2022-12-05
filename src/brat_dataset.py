@@ -655,9 +655,11 @@ class Brat(datasets.GeneratorBasedBuilder):
 
             txt_fn = f"{files_without_ext[i]}.{self.config.txt_file_extension}"
 
-            with open(txt_fn, "r") as read_handle:
-                txt_content = read_handle.read()
-
+            try:
+                with open(txt_fn, "r") as read_handle:
+                    txt_content = read_handle.read()
+            except ValueError:
+                continue
             # don't need that anymore, this is done by the brat dataloader
             # sentences, sentence_offsets, paragraph_offsets = self._get_sentences_spans(txt_content)
 
