@@ -157,6 +157,7 @@ class DrugNER(object):
 
     def compute_metrics(self, p):
         """..."""
+        print("Computing metrics ... ")
         predictions, labels = p
         predictions = np.argmax(predictions, axis=2)
 
@@ -173,6 +174,7 @@ class DrugNER(object):
         results = self.metric.compute(
             predictions=cleaned_predictions, references=true_labels, suffix=False
         )
+        print(results.keys())
         wandb.log(results)
 
         return results
