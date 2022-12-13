@@ -58,12 +58,18 @@ def chunk_documents(documents, num_sentences=3, unify_tags=False):
     chunks_tokens = []
     chunks_tags = []
     file_ids = []
+    languages = []
 
-    for file_name, row in zip(documents["file_name"], documents["tokens_per_sentence"]):
+    for file_name, row, lang in zip(
+        documents["file_name"], documents["tokens_per_sentence"], documents["language"]
+    ):
         chunks = [row[i : i + num_sentences] for i in range(0, len(row), num_sentences)]
         chunks_tokens += chunks
 
+        # add file IDs for every chunk (original file base name + )
         file_ids += [f"{file_name}{DELIMITER}{j}" for j in range(0, len(chunks))]
+        # add the language for every chunk
+        languages += [lang] * len(chunks)
 
     if unify_tags:
         for row in documents["tags_per_sentence"]:
@@ -81,6 +87,7 @@ def chunk_documents(documents, num_sentences=3, unify_tags=False):
         "chunks_tokens": chunks_tokens,
         "chunks_tags": chunks_tags,
         "file_ids": file_ids,
+        "language": languages,
     }
 
 

@@ -1,14 +1,19 @@
 """..."""
+import evaluate
+
 from datasets import DatasetDict
 from datasets import load_dataset
 from datasets import load_metric
 from transformers import AutoModelForTokenClassification
 from transformers import AutoTokenizer
+from transformers import CanineForTokenClassification
+from transformers import CanineTokenizer
 from transformers import DataCollatorForTokenClassification
 from transformers import EarlyStoppingCallback
 from transformers import Trainer
 from transformers import TrainingArguments
 from transformers import set_seed
+
 
 import argparse
 import json
@@ -60,7 +65,8 @@ class DrugNER(object):
         self.label2id = {}
         self.id2label = {}
 
-        self.metric = load_metric("seqeval")
+        self.metric = evaluate.load("seqeval")
+        self.fair_eval = evaluate.load("hpi-dhc/FairEval", suffix=False)
 
     def get_tokenizer(self, model=False):
         print(model)
@@ -68,9 +74,12 @@ class DrugNER(object):
         if not model:
             model = self.config["model_name"]
 
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            model, use_fast=True, add_prefix_space=True
-        )
+        if self.config["model_name"].startswith("google/canine"):
+            self.tokenizer = CanineTokenizer.from_pretrained("google/canine-c")
+        else:
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model, use_fast=True, add_prefix_space=True
+            )
 
     def get_model(self, model=None):
         """Load a pre-trained model."""
@@ -79,13 +88,28 @@ class DrugNER(object):
 
         print(f"\nMODEL: {model}")
 
-        self.model = AutoModelForTokenClassification.from_pretrained(
-            model,
-            num_labels=len(self.label_list),
-            ignore_mismatched_sizes=True,
-            id2label=self.id2label,
-            label2id=self.label2id,
-        )
+        if self.config["model_name"].startswith("google/canine"):
+            self.model = CanineForTokenClassification.from_pretrained(
+                self.config["model_name"]
+            )
+
+        else:
+            self.model = AutoModelForTokenClassification.from_pretrained(
+                model,
+                num_labels=len(self.label_list),
+                ignore_mismatched_sizes=True,
+                id2label=self.id2label,
+                label2id=self.label2id,
+            )
+
+    # def convert_to_unicode_id(self, documents):
+    #     """Turn each character into its unicode code point id."""
+
+    #     input_ids = torch.tensor([[ord(char) for char in text]])
+    #     tokenized_inputs["labels"] = labels
+    #     tokenized_inputs["sub_tokens"] = sub_tokens_all
+
+    #     return converted_inputs
 
     def tokenize_and_align_labels(self, documents, label_all_tokens=True):
         """Align the labels with the IDs.
@@ -95,65 +119,87 @@ class DrugNER(object):
         chunked_tokens = documents["chunks_tokens"]
         chunked_labels = documents["chunks_tags"]
 
-        # sub-tokenize input sentences and convert to IDs
-        tokenized_inputs = self.tokenizer(
-            chunked_tokens,
-            is_split_into_words=True,
-            truncation=True,
-            max_length=510,
-            padding="max_length",
-            # add_prefix_space=True
-        )
-        # add the original tokens to the dataset
-        tokenized_inputs["chunks_tokens"] = documents["chunks_tokens"]
+        if self.config["model_name"].startswith("google/canine"):
+            tokenized_inputs = {
+                "input_ids": [],
+                "token_type_ids": [],
+                "attention_mask": [],
+            }
+            for chunk in chunked_tokens:
+                inputs = self.tokenizer(
+                    chunk, padding="longest", truncation=True, return_tensors="pt"
+                )
 
-        # we do no need this, only out of curiosity for what the sub word tokens
-        # look like
-        sub_tokens_all = []
-        for idx_list in tokenized_inputs["input_ids"]:
-            # input_ids = tokenized_inputs["input_ids"][i]
-            sub_tokens = self.tokenizer.convert_ids_to_tokens(idx_list)
-            sub_tokens_all.append(sub_tokens)
+                assert (
+                    len(inputs["input_ids"])
+                    == len(inputs["token_type_ids"])
+                    == len(inputs["attention_mask"])
+                )
 
-        labels = []
-        # for i, label in enumerate(documents["ner_tags"]):
-        for i, chunked_label_list in enumerate(chunked_labels):
-            word_ids = tokenized_inputs.word_ids(batch_index=i)
+                tokenized_inputs["input_ids"].append(inputs["input_ids"])
+                tokenized_inputs["token_type_ids"].append(inputs["token_type_ids"])
+                tokenized_inputs["attention_mask"].append(inputs["attention_mask"])
 
-            previous_word_idx = None
-            label_ids = []
-            for word_idx in word_ids:
-                # Special tokens have a word id that is None. We set the label to -100 so they are automatically
-                # ignored in the loss function.
-                if word_idx is None:
-                    label_ids.append(-100)
-                # We set the label for the first token of each word.
-                elif word_idx != previous_word_idx:
-                    label_ids.append(self.label2id[chunked_label_list[word_idx]])
-                # For the other tokens in a word, we set the label to either the current label or -100, depending on
-                # the label_all_tokens flag.
-                else:
-                    label_ids.append(
-                        self.label2id[chunked_label_list[word_idx]]
-                        if label_all_tokens
-                        else -100
-                    )
-                previous_word_idx = word_idx
+            # print(f"\ntokenized_inputs: {tokenized_inputs}")
 
-            labels.append(label_ids)
+            return tokenized_inputs
+        else:
 
-        assert len(labels) == len(
-            sub_tokens_all
-        ), "#labels and #sub tokens do not match"
+            # sub-tokenize input sentences and convert to IDs
+            tokenized_inputs = self.tokenizer(
+                chunked_tokens,
+                is_split_into_words=True,
+                truncation=True,
+                max_length=510,
+                padding="max_length",
+                # add_prefix_space=True
+            )
+            # add the original tokens to the dataset
+            tokenized_inputs["chunks_tokens"] = documents["chunks_tokens"]
 
-        tokenized_inputs["labels"] = labels
-        tokenized_inputs["sub_tokens"] = sub_tokens_all
+            # we do no need this, only out of curiosity for what the sub word tokens
+            # look like
+            sub_tokens_all = []
+            for idx_list in tokenized_inputs["input_ids"]:
+                # input_ids = tokenized_inputs["input_ids"][i]
+                sub_tokens = self.tokenizer.convert_ids_to_tokens(idx_list)
+                sub_tokens_all.append(sub_tokens)
 
-        # print(f"\nsub tokens: {sub_tokens_all}\n")
+            labels = []
+            # for i, label in enumerate(documents["ner_tags"]):
+            for i, chunked_label_list in enumerate(chunked_labels):
+                word_ids = tokenized_inputs.word_ids(batch_index=i)
 
-        # print(f"\nsub tokens lengths: {[len(subs) for subs in sub_tokens_all]}\n")
+                previous_word_idx = None
+                label_ids = []
+                for word_idx in word_ids:
+                    # Special tokens have a word id that is None. We set the label to -100 so they are automatically
+                    # ignored in the loss function.
+                    if word_idx is None:
+                        label_ids.append(-100)
+                    # We set the label for the first token of each word.
+                    elif word_idx != previous_word_idx:
+                        label_ids.append(self.label2id[chunked_label_list[word_idx]])
+                    # For the other tokens in a word, we set the label to either the current label or -100, depending on
+                    # the label_all_tokens flag.
+                    else:
+                        label_ids.append(
+                            self.label2id[chunked_label_list[word_idx]]
+                            if label_all_tokens
+                            else -100
+                        )
+                    previous_word_idx = word_idx
 
-        return tokenized_inputs
+                labels.append(label_ids)
+
+            assert len(labels) == len(
+                sub_tokens_all
+            ), "#labels and #sub tokens do not match"
+
+            tokenized_inputs["labels"] = labels
+            tokenized_inputs["sub_tokens"] = sub_tokens_all
+
+            return tokenized_inputs
 
     def compute_metrics(self, p):
         """..."""
@@ -171,13 +217,22 @@ class DrugNER(object):
             for prediction, label in zip(predictions, labels)
         ]
 
-        results = self.metric.compute(
+        results_trad = self.metric.compute(
             predictions=cleaned_predictions, references=true_labels, suffix=False
         )
-        print(results.keys())
-        wandb.log(results)
+        results_fair = self.fair_eval.compute(
+            predictions=cleaned_predictions,
+            references=true_labels,
+            mode="fair",
+            error_format="count",
+        )
 
-        return results
+        print(json.dumps(results_fair, indent=2))
+
+        wandb.log(results_trad)
+        wandb.log(results_fair)
+
+        return results_trad
 
     def predict(self, model):
         """..."""
@@ -213,8 +268,13 @@ class DrugNER(object):
 
         if self.debug:
             epochs = 10
+            eval_steps = 20  # 500
+            save_steps = 20
+
         else:
             epochs = self.config["epochs"]
+            eval_steps = 500  # 500
+            save_steps = 500
 
         out_dir = os.path.join(
             self.out_dir,
@@ -225,8 +285,8 @@ class DrugNER(object):
             output_dir=out_dir,
             evaluation_strategy="steps",
             save_strategy="steps",
-            eval_steps=500,  # 500
-            save_steps=500,
+            eval_steps=eval_steps,  # 500
+            save_steps=save_steps,
             learning_rate=self.config["learning_rate"],
             per_device_train_batch_size=self.config["batch_size"],
             per_device_eval_batch_size=self.config["batch_size"],
@@ -243,6 +303,7 @@ class DrugNER(object):
 
         # batches processed examples together while applying padding to make
         # them all the same size
+        # if self.config["model_name"] != "google/canine-c":
         data_collator = DataCollatorForTokenClassification(self.tokenizer, padding=True)
 
         trainer = Trainer(
@@ -257,7 +318,21 @@ class DrugNER(object):
                 EarlyStoppingCallback(early_stopping_patience=self.config["patience"])
             ],
         )
-
+        # else:
+        # trainer = Trainer(
+        #     self.model,
+        #     args=args,
+        #     train_dataset=self.datasets["train"],
+        #     eval_dataset=self.datasets["dev"],
+        #     # data_collator=data_collator,
+        #     # tokenizer=self.tokenizer,
+        #     compute_metrics=self.compute_metrics,
+        #     callbacks=[
+        #         EarlyStoppingCallback(
+        #             early_stopping_patience=self.config["patience"]
+        #         )
+        #     ],
+        # )
         trainer.train()
         trainer.evaluate()
 
@@ -276,39 +351,25 @@ class DrugNER(object):
             },
             url=self.config["data_url"],
             unify_tags=self.config["unify_tags"],
+            remove_all_except_drug=self.config["remove_all_except_drug"],
             # cache_dir="../.cache/huggingface/datasets",
             download_mode="force_redownload",
         )
 
         # dataset = load_dataset('dfki-nlp/brat', **kwargs)
 
-        # print(train_test)
-        # print(f"Splitting data with seed {self.config['seed']} ...\n")
-
-        # # get X % of the train set to serve as dev set
-        # train_dev = train_test["train"].train_test_split(
-        #     test_size=self.config["val_size"], seed=self.config["seed"]
-        # )
-
-        # # gather everything to get a single DatasetDict
-        # datasets = DatasetDict(
-        #     {
-        #         "train": train_dev["train"],
-        #         "dev": train_dev["test"],
-        #         "test": train_test["test"],
-        #     }
-        # )
-        # print(f"train files: {datasets['train']['file_name']}")
-        # print(f"dev files: {datasets['dev']['file_name']}")
-        print(datasets)
+        print(json.dumps(datasets["train"][0], indent=2))
 
         if self.config["unify_tags"]:
             self.label_list = datasets["train"].features["ner_tags"].feature.names
         else:
             self.label_list = datasets["train"].features["token_labels"].feature.names
 
+        print(self.label_list)
         self.label2id = {l: i for i, l in enumerate(self.label_list)}
         self.id2label = {i: l for i, l in enumerate(self.label_list)}
+
+        print(json.dumps(self.label2id, indent=2))
 
         print(
             f"train: {len(datasets['train']['tags_per_sentence'])}, max len: {max([len(sent) for sent in datasets['train']['tags_per_sentence']])}\n"
@@ -332,7 +393,7 @@ class DrugNER(object):
         # print(f"chunk tokens: {datasets['test']['chunks_tokens']}\n")
 
         # combine the lists of lists of tokens to lists of tokens (should be done in mapping above)
-        datasets = datasets.map(
+        self.datasets = datasets.map(
             utils.combine_x_sentences,
             batched=True,
             # those two columns are not really removed but replaced by the
@@ -340,13 +401,24 @@ class DrugNER(object):
             remove_columns=["chunks_tokens", "chunks_tags"],
         )
 
+        print(self.datasets)
+
+        # if self.config["model_name"] == "google/canine-c":
+
+        #     self.tokenized_datasets = self.datasets.map(
+        #         self.convert_to_unicode_id, batched=True
+        #     )
+
+        # else:
+
         self.get_tokenizer(model=model)
 
-        self.tokenized_datasets = datasets.map(
+        self.tokenized_datasets = self.datasets.map(
             self.tokenize_and_align_labels,
             batched=True,
             fn_kwargs={"label_all_tokens": True},
         )
+        # print(json.dumps(self.tokenized_datasets["train"][0], indent=2))
 
     def train_model(self, model=None):
         trained_model = self.train_and_evaluate_model(model=model)

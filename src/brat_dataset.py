@@ -49,6 +49,7 @@ class BratConfig(BuilderConfig):
     subdirectory_mapping: Optional[Dict[str, str]] = None
     file_name_blacklist: Optional[List[str]] = None
     unify_tags: bool = False
+    remove_all_except_drug: bool = True
     ann_file_extension: str = "ann"
     txt_file_extension: str = "txt"
 
@@ -65,134 +66,135 @@ class Brat(datasets.GeneratorBasedBuilder):
                 {
                     "context": Value("string"),
                     "tokens": Sequence(Value("string")),
+                    "language": Value("string"),
                     "ner_tags": datasets.Sequence(
                         datasets.features.ClassLabel(  # names_file
                             names=[
                                 "O",
-                                "B-ADE",
-                                "B-age",
-                                "B-Age_else",
-                                "B-Age_high",
-                                "B-Age_low",
-                                "B-ANAT",
-                                "B-anatomie",
-                                "B-CHEM",
-                                "B-Conclusion",
-                                "B-Condition",
-                                "B-date",
-                                "B-DEVI",
-                                "B-DiagLab",
-                                "B-DIAGNOSIS",
-                                "B-DISO",
-                                "B-Disposition",
-                                "B-Dosage",
-                                "B-dose",
+                                # "B-ADE",
+                                # "B-age",
+                                # "B-Age_else",
+                                # "B-Age_high",
+                                # "B-Age_low",
+                                # "B-ANAT",
+                                # "B-anatomie",
+                                # "B-CHEM",
+                                # "B-Conclusion",
+                                # "B-Condition",
+                                # "B-date",
+                                # "B-DEVI",
+                                # "B-DiagLab",
+                                # "B-DIAGNOSIS",
+                                # "B-DISO",
+                                # "B-Disposition",
+                                # "B-Dosage",
+                                # "B-dose",
                                 "B-Drug",
-                                "B-Duration",
-                                "B-duree",
-                                "B-examen",
-                                "B-Finding",
-                                "B-Form",
-                                "B-frequence",
-                                "B-Frequency",
-                                "B-genre",
-                                "B-GEOG",
-                                "B-HealthState",
-                                "B-issue",
-                                "B-LabValues",
-                                "B-LIVB",
-                                "B-MEDICATION",
-                                "B-Measure",
-                                "B-Medication",
-                                "B-mode",
-                                "B-moment",
-                                "B-NoDisposition",
-                                "B-OBJC",
-                                "B-origine",
-                                "B-Other",
-                                "B-pathologie",
-                                "B-PHEN",
-                                "B-PHYS",
-                                "B-PROC",
-                                "B-Procedure",
-                                "B-Process",
-                                "B-Reason",
-                                "B-Route",
-                                "B-sosy",
-                                "B-Strength",
-                                "B-Substance",
-                                "B-substance",
-                                "B-Temporal",
-                                "B-TimeInfo",
-                                "B-traitement",
-                                "B-TREATMENT",
-                                "B-Tx_high",
-                                "B-Tx_low",
-                                "B-Tx_middle",
-                                "B-Undetermined",
-                                "B-valeur",
-                                "I-ADE",
-                                "I-age",
-                                "I-Age_else",
-                                "I-Age_high",
-                                "I-Age_low",
-                                "I-ANAT",
-                                "I-anatomie",
-                                "I-CHEM",
-                                "I-Conclusion",
-                                "I-Condition",
-                                "I-date",
-                                "I-DEVI",
-                                "I-DiagLab",
-                                "I-DIAGNOSIS",
-                                "I-DISO",
-                                "I-Disposition",
-                                "I-Dosage",
-                                "I-dose",
+                                # "B-Duration",
+                                # "B-duree",
+                                # "B-examen",
+                                # "B-Finding",
+                                # "B-Form",
+                                # "B-frequence",
+                                # "B-Frequency",
+                                # "B-genre",
+                                # "B-GEOG",
+                                # "B-HealthState",
+                                # "B-issue",
+                                # "B-LabValues",
+                                # "B-LIVB",
+                                # "B-MEDICATION",
+                                # "B-Measure",
+                                # "B-Medication",
+                                # "B-mode",
+                                # "B-moment",
+                                # "B-NoDisposition",
+                                # "B-OBJC",
+                                # "B-origine",
+                                # "B-Other",
+                                # "B-pathologie",
+                                # "B-PHEN",
+                                # "B-PHYS",
+                                # "B-PROC",
+                                # "B-Procedure",
+                                # "B-Process",
+                                # "B-Reason",
+                                # "B-Route",
+                                # "B-sosy",
+                                # "B-Strength",
+                                # "B-Substance",
+                                # "B-substance",
+                                # "B-Temporal",
+                                # "B-TimeInfo",
+                                # "B-traitement",
+                                # "B-TREATMENT",
+                                # "B-Tx_high",
+                                # "B-Tx_low",
+                                # "B-Tx_middle",
+                                # "B-Undetermined",
+                                # "B-valeur",
+                                # "I-ADE",
+                                # "I-age",
+                                # "I-Age_else",
+                                # "I-Age_high",
+                                # "I-Age_low",
+                                # "I-ANAT",
+                                # "I-anatomie",
+                                # "I-CHEM",
+                                # "I-Conclusion",
+                                # "I-Condition",
+                                # "I-date",
+                                # "I-DEVI",
+                                # "I-DiagLab",
+                                # "I-DIAGNOSIS",
+                                # "I-DISO",
+                                # "I-Disposition",
+                                # "I-Dosage",
+                                # "I-dose",
                                 "I-Drug",
-                                "I-Duration",
-                                "I-duree",
-                                "I-examen",
-                                "I-Finding",
-                                "I-Form",
-                                "I-frequence",
-                                "I-Frequency",
-                                "I-genre",
-                                "I-GEOG",
-                                "I-HealthState",
-                                "I-issue",
-                                "I-LabValues",
-                                "I-LIVB",
-                                "I-Measure",
-                                "I-MEDICATION",
-                                "I-Medication",
-                                "I-mode",
-                                "I-moment",
-                                "I-NoDisposition",
-                                "I-OBJC",
-                                "I-origine",
-                                "I-Other",
-                                "I-pathologie",
-                                "I-PHEN",
-                                "I-PHYS",
-                                "I-PROC",
-                                "I-Procedure",
-                                "I-Process",
-                                "I-Reason",
-                                "I-Route",
-                                "I-sosy",
-                                "I-Strength",
-                                "I-Substance",
-                                "I-substance",
-                                "I-Temporal",
-                                "I-TimeInfo",
-                                "I-traitement",
-                                "I-TREATMENT",
-                                "I-Tx_high",
-                                "I-Tx_low",
-                                "I-Tx_middle",
-                                "I-Undetermined",
-                                "I-valeur",
+                                # "I-Duration",
+                                # "I-duree",
+                                # "I-examen",
+                                # "I-Finding",
+                                # "I-Form",
+                                # "I-frequence",
+                                # "I-Frequency",
+                                # "I-genre",
+                                # "I-GEOG",
+                                # "I-HealthState",
+                                # "I-issue",
+                                # "I-LabValues",
+                                # "I-LIVB",
+                                # "I-Measure",
+                                # "I-MEDICATION",
+                                # "I-Medication",
+                                # "I-mode",
+                                # "I-moment",
+                                # "I-NoDisposition",
+                                # "I-OBJC",
+                                # "I-origine",
+                                # "I-Other",
+                                # "I-pathologie",
+                                # "I-PHEN",
+                                # "I-PHYS",
+                                # "I-PROC",
+                                # "I-Procedure",
+                                # "I-Process",
+                                # "I-Reason",
+                                # "I-Route",
+                                # "I-sosy",
+                                # "I-Strength",
+                                # "I-Substance",
+                                # "I-substance",
+                                # "I-Temporal",
+                                # "I-TimeInfo",
+                                # "I-traitement",
+                                # "I-TREATMENT",
+                                # "I-Tx_high",
+                                # "I-Tx_low",
+                                # "I-Tx_middle",
+                                # "I-Undetermined",
+                                # "I-valeur",
                             ]
                         )
                     ),
@@ -570,7 +572,7 @@ class Brat(datasets.GeneratorBasedBuilder):
                     )
         return res
 
-    def _unify_tags(tag):
+    def _unify_tags(tag, remove_all_except_drug=True):
         """Unify the three tag names to one label called `Drug`."""
         tag_variations = [
             "NoDisposition",
@@ -586,14 +588,9 @@ class Brat(datasets.GeneratorBasedBuilder):
         for variant in tag_variations:
             if tag.endswith(variant):
                 return tag.replace(variant, "Drug")
-        # if tag.endswith("NoDisposition"):
-        #     return tag.replace("NoDisposition", "Drug")
-        # elif tag.endswith("Disposition"):
-        #     return tag.replace("Disposition", "Drug")
-        # elif tag.endswith("Undetermined"):
-        #     return tag.replace("Undetermined", "Drug")
-        # elif tag in ("Substance", "Medication", "MEDICATION", "substance", "CHEM"):
-        #     return "Drug"
+
+        if remove_all_except_drug:
+            return "O"
         return tag
 
     def _generate_examples(self, files=None, directory=None):
@@ -651,22 +648,20 @@ class Brat(datasets.GeneratorBasedBuilder):
 
             # if we unify tags to "Drug", we only need `ner_tags`, otherwise
             # we use `token_labels`
-            annotations.update({"tokens": [], "token_labels": [], "ner_tags": []})
+            annotations.update(
+                {"tokens": [], "token_labels": [], "ner_tags": [], "language": ""}
+            )
 
             txt_fn = f"{files_without_ext[i]}.{self.config.txt_file_extension}"
 
+            # the language is encoded at the very beginning of the files,
+            # e.g. de_some_corpus.txt
+            annotations["language"] = os.path.basename(files_without_ext[i]).split("_")[
+                0
+            ]
 
             with open(txt_fn, "r", encoding="utf-8") as read_handle:
                 txt_content = read_handle.read()
-
-            #try:
-            #    with open(txt_fn, "r") as read_handle:
-            #        txt_content = read_handle.read()
-            #except ValueError:
-            #    continue
-
-            # don't need that anymore, this is done by the brat dataloader
-            # sentences, sentence_offsets, paragraph_offsets = self._get_sentences_spans(txt_content)
 
             annotations["context"] = txt_content
 

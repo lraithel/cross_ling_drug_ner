@@ -14,5 +14,6 @@
   "test": "test_test",
   "train": "train_test",
   "unify_tags": true,
+  "remove_all_except_drug": true,
   "use_wandb": false
 }

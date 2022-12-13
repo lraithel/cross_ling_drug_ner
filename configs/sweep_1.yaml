@@ -23,4 +23,5 @@ parameters:
     distribution: categorical
     values:
     - xlm-roberta-base
+    - Babelscape/wikineural-multilingual-ner
 program: src/finetune_ner.py
