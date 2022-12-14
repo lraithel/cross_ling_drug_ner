@@ -268,7 +268,6 @@ class DrugNER(object):
                 wandb.log({id2lang[language]: results_fair_per_lang})
 
             except ValueError:
-                print(outputs["predictions"])
                 print(
                     f"Warning: could not get results for language '{id2lang[language]}'"
                 )
@@ -403,7 +402,7 @@ class DrugNER(object):
 
     #     return trainer
 
-    def get_scheduler(self, wu_steps, train_steps):
+    def get_scheduler_and_optimizer(self, wu_steps, train_steps):
         """..."""
         if self.config["optimizer"] == "adamw":
             optimizer = AdamW(
@@ -472,7 +471,7 @@ class DrugNER(object):
 
         num_training_steps = num_epochs * len(train_dataloader)
 
-        lr_scheduler, optimizer = self.get_scheduler(
+        lr_scheduler, optimizer = self.get_scheduler_and_optimizer(
             wu_steps=warmup_steps, train_steps=num_training_steps
         )
 
