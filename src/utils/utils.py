@@ -1,8 +1,15 @@
 """Utilities for data pre-processing."""
 
+import json
+
 from itertools import chain
 
 DELIMITER = "@"
+
+
+with open("src/utils/lang_dict.json", "r") as read_handle:
+    lang2id = json.load(read_handle)
+# lang2id = {"de": 1, "en": 2, "fr": 3, "es": 4, "ja": 5}
 
 
 def _count_number_of_entities(doc):
@@ -69,7 +76,7 @@ def chunk_documents(documents, num_sentences=3, unify_tags=False):
         # add file IDs for every chunk (original file base name + )
         file_ids += [f"{file_name}{DELIMITER}{j}" for j in range(0, len(chunks))]
         # add the language for every chunk
-        languages += [lang] * len(chunks)
+        languages += [lang2id[lang]] * len(chunks)
 
     if unify_tags:
         for row in documents["tags_per_sentence"]:

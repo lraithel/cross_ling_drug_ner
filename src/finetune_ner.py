@@ -1,34 +1,51 @@
 """..."""
-import evaluate
-
 from datasets import DatasetDict
 from datasets import load_dataset
 from datasets import load_metric
+from datetime import datetime
+from datetime import datetime
+from seqeval.metrics import classification_report
+from seqeval.scheme import BILOU
+from seqeval.scheme import IOB2
+from torch.optim import AdamW
+from torch.optim import RAdam
+from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
 from transformers import AutoModelForTokenClassification
 from transformers import AutoTokenizer
 from transformers import CanineForTokenClassification
 from transformers import CanineTokenizer
 from transformers import DataCollatorForTokenClassification
+from transformers import DefaultDataCollator
 from transformers import EarlyStoppingCallback
 from transformers import Trainer
 from transformers import TrainingArguments
+from transformers import get_scheduler
 from transformers import set_seed
 
 
 import argparse
+import evaluate
 import json
 import numpy as np
 import os
+import torch
 import wandb
 
+
 from bio2brat import convert
-from datetime import datetime
-from seqeval.metrics import classification_report
-from seqeval.scheme import BILOU
-from seqeval.scheme import IOB2
 from utils import utils
+from utils.early_stopping import EarlyStopping
 
 os.environ["HF_DATASETS_OFFLINE"] = "1"
+
+current_time = datetime.now().strftime("%y_%m_%d_%H_%M")
+device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+
+
+with open("src/utils/lang_dict.json", "r") as read_handle:
+    lang2id = json.load(read_handle)
+    id2lang = {value: key for key, value in lang2id.items()}
 
 
 class DrugNER(object):
@@ -57,7 +74,6 @@ class DrugNER(object):
         self.time = datetime.now().strftime("%d_%m_%y_%H_%M")
 
         self.data_url = self.config["data_url"]
-        print(self.data_url)
         self.out_dir = self.config["out_dir"]
 
         # will be filled when preparing data
@@ -66,10 +82,9 @@ class DrugNER(object):
         self.id2label = {}
 
         self.metric = evaluate.load("seqeval")
-        self.fair_eval = evaluate.load("hpi-dhc/FairEval", suffix=False)
+        self.fair_eval = evaluate.load("hpi-dhc/FairEval", suffix=False, scheme="IOB2")
 
     def get_tokenizer(self, model=False):
-        print(model)
         """Load a pre-trained tokenizer."""
         if not model:
             model = self.config["model_name"]
@@ -78,15 +93,13 @@ class DrugNER(object):
             self.tokenizer = CanineTokenizer.from_pretrained("google/canine-c")
         else:
             self.tokenizer = AutoTokenizer.from_pretrained(
-                model, use_fast=True, add_prefix_space=True
+                model, use_fast=True, add_prefix_space=True, strip_accent=False
             )
 
     def get_model(self, model=None):
         """Load a pre-trained model."""
         if model is None:
             model = self.config["model_name"]
-
-        print(f"\nMODEL: {model}")
 
         if self.config["model_name"].startswith("google/canine"):
             self.model = CanineForTokenClassification.from_pretrained(
@@ -140,8 +153,6 @@ class DrugNER(object):
                 tokenized_inputs["token_type_ids"].append(inputs["token_type_ids"])
                 tokenized_inputs["attention_mask"].append(inputs["attention_mask"])
 
-            # print(f"\ntokenized_inputs: {tokenized_inputs}")
-
             return tokenized_inputs
         else:
 
@@ -150,7 +161,7 @@ class DrugNER(object):
                 chunked_tokens,
                 is_split_into_words=True,
                 truncation=True,
-                max_length=510,
+                # max_length=510,
                 padding="max_length",
                 # add_prefix_space=True
             )
@@ -201,11 +212,23 @@ class DrugNER(object):
 
             return tokenized_inputs
 
-    def compute_metrics(self, p):
+    def sort_by_language(self, predictions, labels, languages):
+        """Make one set of predictions-labels for each language."""
+        by_language = {
+            lang: {"predictions": [], "true_labels": []} for lang in languages
+        }
+
+        for pred, label, language in zip(predictions, labels, languages):
+            by_language[language]["predictions"].append(pred)
+            by_language[language]["true_labels"].append(label)
+
+        return by_language
+
+    def compute_metrics(self, predictions, labels, languages):
         """..."""
         print("Computing metrics ... ")
-        predictions, labels = p
-        predictions = np.argmax(predictions, axis=2)
+        # predictions, labels = p
+        # predictions = np.argmax(predictions, axis=2)
 
         # Remove ignored index (special tokens)
         cleaned_predictions = [
@@ -216,23 +239,65 @@ class DrugNER(object):
             [self.label_list[l] for (p, l) in zip(prediction, label) if l != -100]
             for prediction, label in zip(predictions, labels)
         ]
-
-        results_trad = self.metric.compute(
-            predictions=cleaned_predictions, references=true_labels, suffix=False
+        sorted_by_language = self.sort_by_language(
+            predictions=cleaned_predictions, labels=true_labels, languages=languages
         )
-        results_fair = self.fair_eval.compute(
-            predictions=cleaned_predictions,
-            references=true_labels,
-            mode="fair",
-            error_format="count",
+        for language, outputs in sorted_by_language.items():
+
+            results_trad_per_lang = self.metric.compute(
+                predictions=outputs["predictions"],
+                references=outputs["true_labels"],
+                suffix=False,
+            )
+
+            wandb.log({id2lang[language]: results_trad_per_lang})
+
+            try:
+                results_fair_per_lang = self.fair_eval.compute(
+                    predictions=outputs["predictions"],
+                    references=outputs["true_labels"],
+                    mode="fair",
+                    error_format="count",
+                )
+                cls_report_per_lang = classification_report(
+                    y_true=outputs["true_labels"],
+                    y_pred=outputs["predictions"],
+                    # output_dict=True,
+                )
+
+                wandb.log({id2lang[language]: results_fair_per_lang})
+
+            except ValueError:
+                print(results_fair_per_lang)
+                print(
+                    f"Warning: could not get results for language '{id2lang[language]}'"
+                )
+                pass
+
+        # compute results over all entities, independent of language
+        # results_trad = self.metric.compute(
+        #     predictions=cleaned_predictions, references=true_labels, suffix=False
+        # )
+
+        cls_report_dict = classification_report(
+            y_true=true_labels, y_pred=cleaned_predictions, output_dict=True
         )
+        print(cls_report_dict)
+        wandb.log({"traditional": cls_report_dict})
 
-        print(json.dumps(results_fair, indent=2))
+        try:
+            results_fair = self.fair_eval.compute(
+                predictions=cleaned_predictions,
+                references=true_labels,
+                mode="fair",
+                error_format="count",
+            )
+            wandb.log({"fair": results_fair})
 
-        wandb.log(results_trad)
-        wandb.log(results_fair)
+        except ValueError:
+            pass
 
-        return results_trad
+        return cls_report_dict
 
     def predict(self, model):
         """..."""
@@ -259,84 +324,254 @@ class DrugNER(object):
 
         return self.tokenized_datasets["test"], converted_predictions, results
 
+    # def train_and_evaluate_model(self, model=None):
+    #     """..."""
+    #     self.get_model(model=model)
+
+    #     model = self.config["model_name"]
+    #     model_name = model.split("/")[-1]
+
+    #     if self.debug:
+    #         epochs = 10
+    #         eval_steps = 20  # 500
+    #         save_steps = 20
+
+    #     else:
+    #         epochs = self.config["epochs"]
+    #         eval_steps = 500  # 500
+    #         save_steps = 500
+
+    #     out_dir = os.path.join(
+    #         self.out_dir,
+    #         f"{model_name}-finetuned-ner_unifytags_{self.config['unify_tags']}_{self.time}",
+    #     )
+
+    #     args = TrainingArguments(
+    #         output_dir=out_dir,
+    #         evaluation_strategy="steps",
+    #         save_strategy="steps",
+    #         eval_steps=eval_steps,  # 500
+    #         save_steps=save_steps,
+    #         learning_rate=self.config["learning_rate"],
+    #         per_device_train_batch_size=self.config["batch_size"],
+    #         per_device_eval_batch_size=self.config["batch_size"],
+    #         num_train_epochs=epochs,
+    #         weight_decay=0.01,
+    #         push_to_hub=False,
+    #         seed=self.config["seed"],
+    #         load_best_model_at_end=True,
+    #         metric_for_best_model="overall_f1",
+    #         greater_is_better=True,
+    #         save_total_limit=1,
+    #         report_to="wandb",
+    #     )
+
+    #     # batches processed examples together while applying padding to make
+    #     # them all the same size
+    #     # if self.config["model_name"] != "google/canine-c":
+    #     data_collator = DataCollatorForTokenClassification(self.tokenizer, padding=True)
+
+    #     trainer = Trainer(
+    #         self.model,
+    #         args=args,
+    #         train_dataset=self.tokenized_datasets["train"],
+    #         eval_dataset=self.tokenized_datasets["dev"],
+    #         data_collator=data_collator,
+    #         tokenizer=self.tokenizer,
+    #         compute_metrics=self.compute_metrics,
+    #         callbacks=[
+    #             EarlyStoppingCallback(early_stopping_patience=self.config["patience"])
+    #         ],
+    #     )
+    #     # else:
+    #     # trainer = Trainer(
+    #     #     self.model,
+    #     #     args=args,
+    #     #     train_dataset=self.datasets["train"],
+    #     #     eval_dataset=self.datasets["dev"],
+    #     #     # data_collator=data_collator,
+    #     #     # tokenizer=self.tokenizer,
+    #     #     compute_metrics=self.compute_metrics,
+    #     #     callbacks=[
+    #     #         EarlyStoppingCallback(
+    #     #             early_stopping_patience=self.config["patience"]
+    #     #         )
+    #     #     ],
+    #     # )
+    #     trainer.train()
+    #     trainer.evaluate()
+
+    #     return trainer
+
+    def get_scheduler(self, wu_steps, train_steps):
+        """..."""
+        if self.config["optimizer"] == "adamw":
+            optimizer = AdamW(
+                self.model.parameters(),
+                lr=self.config["learning_rate"],
+                weight_decay=self.config["weight_decay"],
+            )
+        elif self.config["optimizer"] == "radam":
+            optimizer = RAdam(
+                self.model.parameters(),
+                lr=self.config["learning_rate"],
+                weight_decay=self.config["weight_decay"],
+            )
+        else:
+            optimizer = AdamW(
+                self.model.parameters(),
+                lr=self.config["learning_rate"],
+                weight_decay=self.config["weight_decay"],
+            )
+
+        lr_scheduler = get_scheduler(
+            name="linear",
+            optimizer=optimizer,
+            num_warmup_steps=wu_steps,
+            num_training_steps=train_steps,
+        )
+
+        return lr_scheduler, optimizer
+
     def train_and_evaluate_model(self, model=None):
         """..."""
         self.get_model(model=model)
 
-        model = self.config["model_name"]
-        model_name = model.split("/")[-1]
+        model_name = self.config["model_name"]
+        model_name = model_name.split("/")[-1]
 
-        if self.debug:
-            epochs = 10
-            eval_steps = 20  # 500
-            save_steps = 20
+        self.tokenized_datasets.set_format("torch")
 
-        else:
-            epochs = self.config["epochs"]
-            eval_steps = 500  # 500
-            save_steps = 500
-
-        out_dir = os.path.join(
-            self.out_dir,
-            f"{model_name}-finetuned-ner_unifytags_{self.config['unify_tags']}_{self.time}",
-        )
-
-        args = TrainingArguments(
-            output_dir=out_dir,
-            evaluation_strategy="steps",
-            save_strategy="steps",
-            eval_steps=eval_steps,  # 500
-            save_steps=save_steps,
-            learning_rate=self.config["learning_rate"],
-            per_device_train_batch_size=self.config["batch_size"],
-            per_device_eval_batch_size=self.config["batch_size"],
-            num_train_epochs=epochs,
-            weight_decay=0.01,
-            push_to_hub=False,
-            seed=self.config["seed"],
-            load_best_model_at_end=True,
-            metric_for_best_model="overall_f1",
-            greater_is_better=True,
-            save_total_limit=1,
-            report_to="wandb",
-        )
-
-        # batches processed examples together while applying padding to make
-        # them all the same size
-        # if self.config["model_name"] != "google/canine-c":
         data_collator = DataCollatorForTokenClassification(self.tokenizer, padding=True)
 
-        trainer = Trainer(
-            self.model,
-            args=args,
-            train_dataset=self.tokenized_datasets["train"],
-            eval_dataset=self.tokenized_datasets["dev"],
-            data_collator=data_collator,
-            tokenizer=self.tokenizer,
-            compute_metrics=self.compute_metrics,
-            callbacks=[
-                EarlyStoppingCallback(early_stopping_patience=self.config["patience"])
-            ],
+        train_dataloader = DataLoader(
+            self.tokenized_datasets["train"],
+            shuffle=True,
+            batch_size=self.config["batch_size"],
+            collate_fn=data_collator,
         )
-        # else:
-        # trainer = Trainer(
-        #     self.model,
-        #     args=args,
-        #     train_dataset=self.datasets["train"],
-        #     eval_dataset=self.datasets["dev"],
-        #     # data_collator=data_collator,
-        #     # tokenizer=self.tokenizer,
-        #     compute_metrics=self.compute_metrics,
-        #     callbacks=[
-        #         EarlyStoppingCallback(
-        #             early_stopping_patience=self.config["patience"]
-        #         )
-        #     ],
-        # )
-        trainer.train()
-        trainer.evaluate()
+        eval_dataloader = DataLoader(
+            self.tokenized_datasets["dev"],
+            batch_size=self.config["batch_size"],
+            collate_fn=data_collator,
+        )
 
-        return trainer
+        es = EarlyStopping(patience=self.config["patience"], mode="max")
+
+        if self.debug:
+            num_epochs = 10
+            eval_steps = 10  # 500
+            save_steps = 10
+            warmup_steps = 10
+
+        else:
+            num_epochs = self.config["epochs"]
+            eval_steps = 500  # 500
+            save_steps = 500
+            warmup_steps = self.config.get("warmup_steps", 200)
+
+        num_training_steps = num_epochs * len(train_dataloader)
+
+        lr_scheduler, optimizer = self.get_scheduler(
+            wu_steps=warmup_steps, train_steps=num_training_steps
+        )
+
+        self.model.to(device)
+
+        progress_bar = tqdm(range(num_training_steps))
+        best_macro_f1 = 0.0
+        best_model = None
+
+        self.model.train()
+
+        for epoch in range(num_epochs):
+
+            for batch in train_dataloader:
+
+                batch = {k: v.to(device) for k, v in batch.items()}
+
+                inputs = {
+                    "input_ids": batch["input_ids"],
+                    "attention_mask": batch["attention_mask"],
+                    "labels": batch["labels"],
+                }
+
+                outputs = self.model(**inputs)
+                loss = outputs.loss
+                wandb.log({"train/loss": loss})
+                loss.backward()
+
+                optimizer.step()
+                lr_scheduler.step()
+                optimizer.zero_grad()
+                progress_bar.update(1)
+
+            self.model.eval()
+
+            eval_predictions = []
+            eval_languages = []
+            eval_true_labels = []
+
+            for batch in eval_dataloader:
+                batch = {k: v.to(device) for k, v in batch.items()}
+
+                inputs = {
+                    "input_ids": batch["input_ids"],
+                    "attention_mask": batch["attention_mask"],
+                    "labels": batch["labels"],
+                }
+
+                with torch.no_grad():
+                    outputs = self.model(**inputs)
+
+                eval_loss = outputs.loss
+                wandb.log({"eval/loss": eval_loss})
+
+                logits = outputs.logits
+                predictions = (
+                    torch.argmax(logits, dim=-1).detach().cpu().numpy().tolist()
+                )
+                true_labels = batch["labels"].detach().cpu().numpy().tolist()
+                languages = batch["language"].detach().cpu().numpy().tolist()
+
+                eval_predictions.extend(predictions)
+                eval_true_labels.extend(true_labels)
+                eval_languages.extend(languages)
+
+                # metric.add_batch(predictions=predictions, references=batch["labels"])
+
+            results = self.compute_metrics(
+                predictions=eval_predictions,
+                labels=eval_true_labels,
+                languages=eval_languages,
+            )
+
+            current_macro_f1 = results["macro avg"]["f1-score"]
+
+            # save best F1 and model
+            if current_macro_f1 > best_macro_f1:
+                best_macro_f1 = current_macro_f1
+                best_model = self.model
+                wandb.log(
+                    {
+                        "best_macro_f1": best_macro_f1,
+                        "epoch_of_best_f1": epoch,
+                    }
+                )
+
+                model_id = os.path.join(
+                    self.out_dir,
+                    f"weights_{model_name.replace('/', '-')}_{current_time}.pth",
+                )
+                wandb.log({"model_id": model_id})
+
+                torch.save(best_model.state_dict(), model_id)
+
+            if es.step(current_macro_f1):
+                print(f"Stopping training with F1 of {current_macro_f1}.")
+                break
+
+        return True
 
     def prepare_data(self, model=False, download_mode="force_redownload"):
         """..."""
@@ -358,18 +593,13 @@ class DrugNER(object):
 
         # dataset = load_dataset('dfki-nlp/brat', **kwargs)
 
-        print(json.dumps(datasets["train"][0], indent=2))
-
         if self.config["unify_tags"]:
             self.label_list = datasets["train"].features["ner_tags"].feature.names
         else:
             self.label_list = datasets["train"].features["token_labels"].feature.names
 
-        print(self.label_list)
         self.label2id = {l: i for i, l in enumerate(self.label_list)}
         self.id2label = {i: l for i, l in enumerate(self.label_list)}
-
-        print(json.dumps(self.label2id, indent=2))
 
         print(
             f"train: {len(datasets['train']['tags_per_sentence'])}, max len: {max([len(sent) for sent in datasets['train']['tags_per_sentence']])}\n"
@@ -401,7 +631,7 @@ class DrugNER(object):
             remove_columns=["chunks_tokens", "chunks_tags"],
         )
 
-        print(self.datasets)
+        # print(self.datasets)
 
         # if self.config["model_name"] == "google/canine-c":
 
@@ -418,7 +648,22 @@ class DrugNER(object):
             batched=True,
             fn_kwargs={"label_all_tokens": True},
         )
-        # print(json.dumps(self.tokenized_datasets["train"][0], indent=2))
+
+        # remove features that are not necessary for training
+        self.tokenized_datasets = self.tokenized_datasets.remove_columns(
+            [
+                col
+                for col in self.tokenized_datasets["train"].features
+                if col
+                not in [
+                    "labels",
+                    "language",
+                    "input_ids",
+                    "token_type_ids",
+                    "attention_mask",
+                ]
+            ]
+        )
 
     def train_model(self, model=None):
         trained_model = self.train_and_evaluate_model(model=model)

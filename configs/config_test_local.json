@@ -15,5 +15,8 @@
   "train": "train_test",
   "unify_tags": true,
   "remove_all_except_drug": true,
-  "use_wandb": false
+  "use_wandb": false,
+  "warumup_steps": 200,
+  "optimizer": "adamw",
+  "weight_decay": 0.01
 }
