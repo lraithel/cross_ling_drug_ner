@@ -268,7 +268,7 @@ class DrugNER(object):
                 wandb.log({id2lang[language]: results_fair_per_lang})
 
             except ValueError:
-                print(results_fair_per_lang)
+                print(outputs["predictions"])
                 print(
                     f"Warning: could not get results for language '{id2lang[language]}'"
                 )
