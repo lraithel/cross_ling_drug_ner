@@ -564,8 +564,9 @@ class DrugNER(object):
                     f"weights_{model_name.replace('/', '-')}_{current_time}.pth",
                 )
                 wandb.log({"model_id": model_id})
-
-                torch.save(best_model.state_dict(), model_id)
+                
+                if self.config["save_best_model"]:
+                    torch.save(best_model.state_dict(), model_id)
 
             if es.step(current_macro_f1):
                 print(f"Stopping training with F1 of {current_macro_f1}.")

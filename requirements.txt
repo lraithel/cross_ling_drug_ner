@@ -4,7 +4,6 @@ async-timeout==4.0.2
 attrs==22.1.0
 blis==0.7.8
 catalogue==2.0.8
-certifi @ file:///opt/conda/conda-bld/certifi_1655968806487/work/certifi
 charset-normalizer==2.1.1
 click==8.1.3
 cymem==2.0.6
@@ -70,7 +69,7 @@ transformers==4.25.1
 typer==0.4.2
 typing_extensions==4.3.0
 urllib3==1.26.12
-wandb==0.13.5
+wandb
 wasabi==0.10.1
 xxhash==3.0.0
 yarl==1.8.1

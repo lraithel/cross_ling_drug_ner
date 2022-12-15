@@ -10,5 +10,6 @@
   "test": "test",
   "train": "train",
   "unify_tags": true,
-  "use_wandb": true
+  "use_wandb": true,
+  "save_best_model": false
 }
