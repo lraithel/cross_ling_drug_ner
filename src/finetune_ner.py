@@ -546,6 +546,7 @@ class DrugNER(object):
             )
 
             current_macro_f1 = results["macro avg"]["f1-score"]
+            wandb.log({"macro_f1": current_macro_f1})
 
             # save best F1 and model
             if current_macro_f1 > best_macro_f1:
