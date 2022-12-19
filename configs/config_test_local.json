@@ -18,5 +18,6 @@
   "use_wandb": false,
   "warumup_steps": 200,
   "optimizer": "adamw",
-  "weight_decay": 0.01
+  "weight_decay": 0.01,
+  "save_best_model": true
 }

@@ -2,7 +2,7 @@
   "data_url": "/netscratch/raithel/projects/cross_ling_drug_ner/converted/",
   "debug": false,
   "dev": "dev",
-  "epochs": 100,
+  "epochs": 50,
   "out_dir": "/netscratch/raithel/projects/cross_ling_drug_detection/models/",
   "patience": 4,
   "remove_all_except_drug": true,

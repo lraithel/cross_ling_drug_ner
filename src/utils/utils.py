@@ -9,7 +9,6 @@ DELIMITER = "@"
 
 with open("src/utils/lang_dict.json", "r") as read_handle:
     lang2id = json.load(read_handle)
-# lang2id = {"de": 1, "en": 2, "fr": 3, "es": 4, "ja": 5}
 
 
 def _count_number_of_entities(doc):
@@ -26,15 +25,6 @@ def _count_number_of_entities(doc):
         s = x.split()
         for y in s:
             strings_split.append(y)
-
-    # tokens = doc["tokens"]
-    # token_tag = []
-    # for token, tag in zip(tokens, ner_tags,):
-    #     if tag != 0:
-    #         token_tag.append((token, tag))
-
-    # for (token, tag), str_span in zip(token_tag, strings_split):
-    #     print(token, tag, str_span)
 
     return tag_num, len(strings_split)
 
