@@ -5,8 +5,9 @@ import os
 import re
 import torch
 
+from torch.utils.data import DataLoader
+
 from finetune_ner import DrugNER
-from transformers import pipeline
 
 from transformers import AutoModelForTokenClassification
 from transformers import AutoTokenizer
@@ -17,49 +18,54 @@ from transformers import TrainingArguments
 from bio2brat import convert
 from utils import utils
 
+device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-def predict(model, dataset, label_list):
+
+# def predict(model, dataset, label_list):
+#     """..."""
+#     print("Final predictions on test set ...")
+
+#     output = model.predict(dataset)
+#     predictions = np.argmax(output[0], axis=2)
+
+#     labels = output[1]
+#     # Remove ignored index (special tokens)
+#     converted_predictions = [
+#         [label_list[p] for (p, l) in zip(prediction, label) if l != -100]
+#         for prediction, label in zip(predictions, labels)
+#     ]
+#     true_labels = [
+#         [label_list[l] for (p, l) in zip(prediction, label) if l != -100]
+#         for prediction, label in zip(predictions, labels)
+#     ]
+
+#     return converted_predictions
+
+
+# def load_model_from_checkpoint(path_to_checkpoint, trainer, batch_size):
+#     """Load the model from the given checkpoint and prepare it for inference."""
+#     print("\nLoading model weights from checkpoint ...\n")
+#     # loading the model previously fine-tuned
+#     model = AutoModelForTokenClassification.from_pretrained(path_to_checkpoint)
+
+#     # arguments for Trainer
+#     test_args = TrainingArguments(
+#         output_dir=path_to_checkpoint,
+#         do_train=False,
+#         do_predict=True,
+#         per_device_eval_batch_size=batch_size,
+#         dataloader_drop_last=False,
+#     )
+
+#     # init trainer
+#     trainer = Trainer(
+#         model=model, args=test_args, compute_metrics=trainer.compute_metrics
+#     )
+
+#     return trainer
+def load_model_from_checkpoint(path_to_checkpoint, batch_size):
     """..."""
-    print("Final predictions on test set ...")
-
-    output = model.predict(dataset)
-    predictions = np.argmax(output[0], axis=2)
-
-    labels = output[1]
-    # Remove ignored index (special tokens)
-    converted_predictions = [
-        [label_list[p] for (p, l) in zip(prediction, label) if l != -100]
-        for prediction, label in zip(predictions, labels)
-    ]
-    true_labels = [
-        [label_list[l] for (p, l) in zip(prediction, label) if l != -100]
-        for prediction, label in zip(predictions, labels)
-    ]
-
-    return converted_predictions
-
-
-def load_model_from_checkpoint(path_to_checkpoint, trainer, batch_size):
-    """Load the model from the given checkpoint and prepare it for inference."""
-    print("\nLoading model weights from checkpoint ...\n")
-    # loading the model previously fine-tuned
-    model = AutoModelForTokenClassification.from_pretrained(path_to_checkpoint)
-
-    # arguments for Trainer
-    test_args = TrainingArguments(
-        output_dir=path_to_checkpoint,
-        do_train=False,
-        do_predict=True,
-        per_device_eval_batch_size=batch_size,
-        dataloader_drop_last=False,
-    )
-
-    # init trainer
-    trainer = Trainer(
-        model=model, args=test_args, compute_metrics=trainer.compute_metrics
-    )
-
-    return trainer
+    pass
 
 
 def get_string_matches(annos, path_to_text, drugs, drug_length=3):
@@ -160,7 +166,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # get the model information (checkpoint, labels, label2id, etc.)
-    checkpoint_dir = "outputs/xlm-roberta-base-finetuned-ner_unifytags_True_05_12_22_17_59/checkpoint-20"
+    checkpoint_dir = "outputs/checkpoint_xlm-roberta-base_22_12_19_17_01/checkpoint_xlm-roberta-base_22_12_19_17_01.pth/"
 
     # get the config file of the model
     checkpoint_config_file = os.path.join(checkpoint_dir, "config.json")
@@ -179,27 +185,60 @@ if __name__ == "__main__":
 
     # prepare the data (train & dev are prepared as well)
     drug_ner.prepare_data(model=cp_config["_name_or_path"])
+    # drug_ner.prepare_data(model=checkpoint_dir)
 
     # if we already created a predictions file, we don't have to run everything
     # again
     if not os.path.isfile(os.path.join(checkpoint_dir, "predictions.json")):
 
         drug_ner.get_model(model=cp_config["_name_or_path"])
+        drug_ner.get_tokenizer(model=cp_config["_name_or_path"])
 
         # trained_model = drug_ner.train_model(model=cp_config["_name_or_path"])
-        trainer = load_model_from_checkpoint(
-            checkpoint_dir, drug_ner, batch_size=drug_ner.config["batch_size"]
+        # trainer = load_model_from_checkpoint(
+        #     checkpoint_dir, drug_ner, batch_size=drug_ner.config["batch_size"]
+        # )
+        model = drug_ner.model
+        tokenizer = drug_ner.tokenizer
+
+        print(drug_ner.tokenized_datasets["test"][0])
+        data_collator = DataCollatorForTokenClassification(
+            drug_ner.tokenizer, padding=True
         )
 
+        test_dataloader = DataLoader(
+            drug_ner.tokenized_datasets["test"],
+            batch_size=drug_ner.config["batch_size"],
+            collate_fn=data_collator,
+        )
+        for batch in test_dataloader:
+
+            batch = {k: v.to(device) for k, v in batch.items()}
+
+            inputs = {
+                "input_ids": batch["input_ids"],
+                "attention_mask": batch["attention_mask"],
+                "labels": batch["labels"],
+            }
+
+            with torch.no_grad():
+                logits = model(**inputs).logits
+
+            predictions = torch.argmax(logits, dim=-1).detach().cpu().numpy().tolist()
+
+            true_labels = batch["labels"].detach().cpu().numpy().tolist()
+            languages = batch["language"].detach().cpu().numpy().tolist()
+
+            print(predictions)
         # print(drug_ner.tokenized_datasets["test"]["sub_tokens"])
         # print(drug_ner.tokenized_datasets["test"]["input_ids"])
         # print(drug_ner.tokenized_datasets["test"]["file_ids"])
         # assert False
-        predictions = predict(
-            model=trainer,
-            dataset=drug_ner.tokenized_datasets["test"],
-            label_list=drug_ner.label_list,
-        )
+        # predictions = predict(
+        #     model=trainer,
+        #     dataset=drug_ner.tokenized_datasets["test"],
+        #     label_list=drug_ner.label_list,
+        # )
         # print(predictions)
 
         with open(os.path.join(checkpoint_dir, "predictions.json"), "w") as d:

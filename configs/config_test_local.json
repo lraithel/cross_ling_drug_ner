@@ -4,8 +4,8 @@
   "data_url": "data/converted",
   "debug": true,
   "dev": "dev_test",
-  "epochs": 100,
-  "learning_rate": 0.0002,
+  "epochs": 50,
+  "learning_rate": 0.00002,
   "model_name": "xlm-roberta-base",
   "num_sentences": 5,
   "out_dir": "outputs",
@@ -18,6 +18,6 @@
   "use_wandb": false,
   "warumup_steps": 200,
   "optimizer": "adamw",
-  "weight_decay": 0.01,
+  "weight_decay": 0.001,
   "save_best_model": true
 }

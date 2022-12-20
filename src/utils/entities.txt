@@ -1,4 +1,3 @@
-O
 B-ADE
 B-age
 B-Age_else
@@ -31,12 +30,14 @@ B-HealthState
 B-issue
 B-LabValues
 B-LIVB
-B-MEDICATION
 B-Measure
+B-MEDICATION
 B-Medication
 B-mode
 B-moment
+B-NO_NORMALIZABLES
 B-NoDisposition
+B-NORMALIZABLES
 B-OBJC
 B-origine
 B-Other
@@ -98,7 +99,9 @@ I-MEDICATION
 I-Medication
 I-mode
 I-moment
+I-NO_NORMALIZABLES
 I-NoDisposition
+I-NORMALIZABLES
 I-OBJC
 I-origine
 I-Other
@@ -123,3 +126,4 @@ I-Tx_low
 I-Tx_middle
 I-Undetermined
 I-valeur
+O

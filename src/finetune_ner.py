@@ -67,7 +67,13 @@ class DrugNER(object):
         self.time = datetime.now().strftime("%d_%m_%y_%H_%M")
 
         self.data_url = self.config["data_url"]
-        self.out_dir = self.config["out_dir"]
+
+        model_name = self.config["model_name"].split("/")[-1]
+        self.out_dir = os.path.join(
+            self.config["out_dir"],
+            f"checkpoint_{model_name.replace('/', '-')}_{current_time}",
+        )
+        os.makedirs(self.out_dir, exist_ok=True)
 
         # will be filled when preparing data
         self.label_list = []
@@ -80,6 +86,7 @@ class DrugNER(object):
 
     def get_tokenizer(self, model=False):
         """Load a pre-trained tokenizer."""
+        print(f"get tokenizer: model: {model}")
         if not model:
             model = self.config["model_name"]
 
@@ -264,6 +271,8 @@ class DrugNER(object):
                 suffix=False,
             )
 
+            print(f"{id2lang[language]}: {results_trad_per_lang}")
+
             wandb.log({f"{id2lang[language]}_trad": results_trad_per_lang})
 
             try:
@@ -361,8 +370,7 @@ class DrugNER(object):
         """..."""
         self.get_model(model=model)
 
-        model_name = self.config["model_name"]
-        model_name = model_name.split("/")[-1]
+        model_name = self.config["model_name"].split("/")[-1]
 
         self.tokenized_datasets.set_format("torch")
 
@@ -383,7 +391,7 @@ class DrugNER(object):
         es = EarlyStopping(patience=self.config["patience"], mode="max")
 
         if self.debug:
-            num_epochs = 4
+            num_epochs = 10
             eval_steps = 10
             save_steps = 10
             warmup_steps = 10
@@ -482,14 +490,16 @@ class DrugNER(object):
                     }
                 )
 
-                model_id = os.path.join(
-                    self.out_dir,
-                    f"checkpoint_{model_name.replace('/', '-')}_{current_time}.pth",
-                )
-                wandb.log({"model_id": model_id})
-
                 if self.config["save_best_model"]:
-                    torch.save(best_model.state_dict(), model_id)
+                    # model_path = os.path.join(
+                    #     self.out_dir,
+                    #     f"checkpoint_{model_name.replace('/', '-')}_{current_time}.pth",
+                    # )
+                    wandb.log({"model_id": self.out_dir})
+
+                    self.tokenizer.save_pretrained(self.out_dir)
+
+                    best_model.save_pretrained(self.out_dir)
 
             if es.step(current_macro_f1):
                 print(f"Stopping training with F1 of {current_macro_f1}.")

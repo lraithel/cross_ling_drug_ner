@@ -11,5 +11,5 @@
   "train": "train",
   "unify_tags": true,
   "use_wandb": true,
-  "save_best_model": false
+  "save_best_model": true
 }

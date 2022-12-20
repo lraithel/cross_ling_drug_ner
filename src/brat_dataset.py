@@ -392,8 +392,10 @@ class Brat(datasets.GeneratorBasedBuilder):
             "MEDICATION",
             "substance",
             "CHEM",
+            "NORMALIZABLES",
+            "NO_NORMALIZABLES",
         ]
-        options.no_sentence_split = False
+        options.no_sentence_split = False  # this is not done very well
         options.exclude = None
         options.tokenization = "default"
         options.tagset = None  # default = BIO
