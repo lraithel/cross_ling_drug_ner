@@ -19,5 +19,6 @@
   "warumup_steps": 200,
   "optimizer": "adamw",
   "weight_decay": 0.001,
-  "save_best_model": true
+  "save_best_model": true,
+  "cache_dir": "data/"
 }
