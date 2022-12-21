@@ -420,6 +420,8 @@ class DrugNER(object):
 
         for epoch in range(num_epochs):
 
+            wandb.log({"current_epoch": epoch})
+
             self.model.train()
 
             for batch in train_dataloader:
