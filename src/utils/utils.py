@@ -156,12 +156,12 @@ def re_combine_documents(dataset, predictions):
         # iterate over sub-tokens and predictions and combine sub-tokens to
         # tokens and "sub"-predictions to tags
         for i, (sub_token, tag) in enumerate(zip(subtokens, preds)):
-            # print(f"\nsubtoken: {sub_token}, tag: {tag}")
+            print(f"\nsubtoken: {sub_token}, tag: {tag}")
 
             # ignore the [SEP] token
             if i == 0:
                 continue
-            if sub_token in ("[PAD]", "[SEP]"):
+            if sub_token in ("[PAD]", "[SEP]", "<pad>", "<sep>"):
                 re_combined_tokens.append(previous_token)
                 re_combined_tags.append(previous_tag)
                 # print("ignoring special token")
@@ -171,6 +171,13 @@ def re_combine_documents(dataset, predictions):
                 # combine sub-tokens
                 previous_token += sub_token.replace("##", "")
                 # the previous tag stays the same
+
+            elif sub_token.startswith("▁"):
+                # combine sub-tokens
+                previous_token = sub_token.replace("▁", "")
+
+            elif not sub_token.startswith("▁"):
+                previous_token += sub_token
 
             else:
                 if previous_token != "":

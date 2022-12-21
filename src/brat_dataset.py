@@ -376,9 +376,9 @@ class Brat(datasets.GeneratorBasedBuilder):
                 "tagset",
             ],
         )
-        options.singletype = None
         options.char_offsets = False
         options.asciify = False
+        options.singletype = None
         options.discont_rule = "full-span"
         # options.overlap_rule = "keep-shorter"
         options.overlap_rule = "keep-longer"

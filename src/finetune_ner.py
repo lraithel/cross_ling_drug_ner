@@ -46,7 +46,7 @@ with open("src/utils/lang_dict.json", "r") as read_handle:
 class DrugNER(object):
     """docstring for DrugNER"""
 
-    def __init__(self, config):
+    def __init__(self, config, mode="train"):
         super(DrugNER, self).__init__()
 
         # load the "static" config params
@@ -70,11 +70,12 @@ class DrugNER(object):
         self.data_url = self.config["data_url"]
 
         model_name = self.config["model_name"].split("/")[-1]
-        self.out_dir = os.path.join(
-            self.config["out_dir"],
-            f"checkpoint_{model_name.replace('/', '-')}_{current_time}",
-        )
-        os.makedirs(self.out_dir, exist_ok=True)
+        if mode == "train":
+            self.out_dir = os.path.join(
+                self.config["out_dir"],
+                f"checkpoint_{model_name.replace('/', '-')}_{current_time}",
+            )
+            os.makedirs(self.out_dir, exist_ok=True)
 
         # will be filled when preparing data
         self.label_list = []
@@ -582,6 +583,8 @@ class DrugNER(object):
                     "input_ids",
                     "token_type_ids",
                     "attention_mask",
+                    "sub_tokens",
+                    "file_ids",
                 ]
             ]
         )
