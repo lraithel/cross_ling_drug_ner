@@ -530,6 +530,7 @@ class DrugNER(object):
             remove_all_except_drug=self.config["remove_all_except_drug"],
             # cache_dir="../.cache/huggingface/datasets",
             download_mode="force_redownload",
+            cache_dir=self.config["cache_dir"],
         )
 
         # dataset = load_dataset('dfki-nlp/brat', **kwargs)
