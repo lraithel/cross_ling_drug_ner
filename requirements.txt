@@ -73,3 +73,5 @@ wandb
 wasabi==0.10.1
 xxhash==3.0.0
 yarl==1.8.1
+accelerate
+

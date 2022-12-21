@@ -31,6 +31,7 @@ from bio2brat import convert
 from utils import utils
 from utils.early_stopping import EarlyStopping
 
+
 os.environ["HF_DATASETS_OFFLINE"] = "1"
 
 current_time = datetime.now().strftime("%y_%m_%d_%H_%M")
@@ -370,6 +371,8 @@ class DrugNER(object):
         """..."""
         self.get_model(model=model)
 
+        # utils.print_gpu_utilization()
+
         model_name = self.config["model_name"].split("/")[-1]
 
         self.tokenized_datasets.set_format("torch")
@@ -501,11 +504,13 @@ class DrugNER(object):
 
                     best_model.save_pretrained(self.out_dir)
 
+            # utils.print_gpu_utilization()
+
             if es.step(current_macro_f1):
                 print(f"Stopping training with F1 of {current_macro_f1}.")
                 break
 
-        return True
+        return best_model
 
     def prepare_data(self, model=False, download_mode="force_redownload"):
         """..."""
@@ -595,6 +600,8 @@ if __name__ == "__main__":
     parser.add_argument("config", default=None, help="Path to config file.")
 
     args = parser.parse_args()
+
+    # utils.print_gpu_utilization()
 
     drug_ner = DrugNER(args.config)
 

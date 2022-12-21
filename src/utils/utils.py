@@ -2,6 +2,8 @@
 
 import json
 
+# from pynvml import *
+
 from itertools import chain
 
 DELIMITER = "@"
@@ -9,6 +11,13 @@ DELIMITER = "@"
 
 with open("src/utils/lang_dict.json", "r") as read_handle:
     lang2id = json.load(read_handle)
+
+
+# def print_gpu_utilization():
+#     nvmlInit()
+#     handle = nvmlDeviceGetHandleByIndex(0)
+#     info = nvmlDeviceGetMemoryInfo(handle)
+#     print(f"GPU memory occupied: {info.used//1024**2} MB.")
 
 
 def _count_number_of_entities(doc):
