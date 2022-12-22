@@ -100,10 +100,7 @@ def get_string_matches(annos, path_to_text, drugs, drug_length=3):
                 ]
             )
 
-    # print(f"tups: {tups}\n")
-    # print(f"added: {set(matches) - tups}\n")
     tups.update(set(matches))
-    # print(f"merged: {tups}\n-----------------------------------------\n")
 
     new_annos = []
     for i, tup in enumerate(tups):
@@ -139,13 +136,6 @@ def convert_documents_to_brat(
         brat_anno, bio_str = convert(
             text_file=path_to_text, model_predictions=prediction, tokens=tokens
         )
-        if drugs:
-            brat_anno = get_string_matches(
-                annos=brat_anno,
-                path_to_text=path_to_text,
-                drugs=drugs,
-                drug_length=drug_length,
-            )
 
         file_name = os.path.basename(txt_file).split(".txt")[0]
         write_conll(
@@ -189,87 +179,27 @@ if __name__ == "__main__":
 
     # prepare the data (train & dev are prepared as well)
     drug_ner.prepare_data(model=cp_config["_name_or_path"])
-    # drug_ner.prepare_data(model=checkpoint_dir)
-
     # if we already created a predictions file, we don't have to run everything
     # again
     if not os.path.isfile(os.path.join(checkpoint_dir, "predictions.json")):
 
         drug_ner.get_model(model=cp_config["_name_or_path"])
-        # drug_ner.get_tokenizer(model=cp_config["_name_or_path"])
 
-        # trained_model = drug_ner.train_model(model=cp_config["_name_or_path"])
         trainer = load_model_from_checkpoint(
             checkpoint_dir, drug_ner, batch_size=drug_ner.config["batch_size"]
         )
-        # model = drug_ner.model
-        # model.eval()
-        # tokenizer = drug_ner.tokenizer
 
-        # data_collator = DataCollatorForTokenClassification(
-        #     drug_ner.tokenizer, padding=True
-        # )
-
-        # test_dataloader = DataLoader(
-        #     drug_ner.tokenized_datasets["test"],
-        #     batch_size=drug_ner.config["batch_size"],
-        #     # collate_fn=data_collator,
-        # )
-
-        # eval_predictions = []
-        # eval_languages = []
-        # eval_true_labels = []
-
-        # print(drug_ner.tokenized_datasets["test"][3])
-
-        # for batch in test_dataloader:
-
-        #     batch = {k: v.to(device) for k, v in batch.items()}
-
-        #     inputs = {
-        #         "input_ids": batch["input_ids"],
-        #         "attention_mask": batch["attention_mask"],
-        #         "labels": batch["labels"],
-        #     }
-
-        #     with torch.no_grad():
-        #         logits = model(**inputs).logits
-
-        #     predictions = torch.argmax(logits, dim=-1).detach().cpu().numpy().tolist()
-
-        #     true_labels = batch["labels"].detach().cpu().numpy().tolist()
-        #     languages = batch["language"].detach().cpu().numpy().tolist()
-
-        #     eval_predictions.extend(predictions)
-        #     eval_true_labels.extend(true_labels)
-        #     eval_languages.extend(languages)
-
-        # converted_predictions = [
-        #     [drug_ner.label_list[p] for (p, l) in zip(prediction, label) if l != -100]
-        #     for prediction, label in zip(predictions, eval_true_labels)
-        # ]
-        # true_labels = [
-        #     [drug_ner.label_list[l] for (p, l) in zip(prediction, label) if l != -100]
-        #     for prediction, label in zip(predictions, eval_true_labels)
-        # ]
-
-        # results = drug_ner.trad_eval.compute(
-        #     predictions=converted_predictions, references=true_labels, suffix=False
-        # )
-        # print(results)
-
-        # assert False
         predictions = predict(
             model=trainer,
             dataset=drug_ner.tokenized_datasets["test"],
             label_list=drug_ner.label_list,
         )
-        # print(predictions)
 
         with open(os.path.join(checkpoint_dir, "predictions.json"), "w") as d:
             json.dump({"predictions": predictions}, d)
 
     else:
+
         print("Opening existing predictions file.")
         with open(os.path.join(checkpoint_dir, "predictions.json"), "r") as d:
             predictions = json.load(d)["predictions"]
@@ -279,32 +209,6 @@ if __name__ == "__main__":
     combined_predictions, combined_tokens, txt_files = utils.re_combine_documents(
         drug_ner.tokenized_datasets["test"], predictions
     )
-
-    # print("\nWARNING: USING DRUG NAMES FROM DEV DATASET:\n")
-    # drug_collection = []
-    # with open("src/collected_drugs_in_train_dev.txt", "r") as read_handle:
-    #     for line in read_handle:
-    #         drug_collection.append(line.strip())
-
-    # # allow to use several version of string matching
-    # for dl in drug_lengths:
-    #     dir_with_string_matching = (
-    #         f"predicted_annotations_with_string_matching_len_{dl}/"
-    #     )
-    #     output_dir_wsm = os.path.join(checkpoint_dir, dir_with_string_matching)
-
-    #     if not os.path.exists(output_dir_wsm):
-    #         os.makedirs(output_dir_wsm)
-
-    #     convert_documents_to_brat(
-    #         predictions=combined_predictions,
-    #         tokens=combined_tokens,
-    #         txt_files=txt_files,
-    #         data_url=drug_ner.data_url,
-    #         output_dir=output_dir_wsm,
-    #         drugs=drug_collection,
-    #         drug_length=dl,
-    #     )
 
     dir_wo_string_matching = "predicted_annotations/"
 

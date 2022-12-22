@@ -15,6 +15,7 @@ and modified for transformer output sequences.
 import os
 import re
 import sys
+import unicodedata
 
 
 class taggedEntity:
@@ -62,6 +63,9 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
     global next_free_id_idx
 
     taggedTokens = []
+
+    BIOlines = [unicodedata.normalize("NFKD", token) for token in BIOlines]
+    reftext = unicodedata.normalize("NFKD", reftext)
 
     ri, bi = 0, 0
     while ri < len(reftext):

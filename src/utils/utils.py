@@ -136,10 +136,13 @@ def re_combine_documents(dataset, predictions):
     # get the sub-tokens per chunk (e.g. one chunk corresponds to 3 sentences, original
     # tokens might correspond to more than one subtoken), and the file ids
     subtokens_per_chunk = dataset["sub_tokens"]
+
     file_ids_per_chunk = dataset["file_ids"]
 
-    # print(f"file ids per chunk: {file_ids_per_chunk}")
-
+    # ["<s>", "▁pri", "mär", "▁guter", "▁Verlauf", "▁nach", "▁", "TX"]
+    # ['B-Drug', 'B-Drug', 'B-Drug', 'B-Drug', 'B-Drug', 'B-Drug', 'B-Drug']
+    # create a list of recombined tokens (out of sub-tokens) and the
+    # corresponding tags
     new_tokens = []
     tags = []
     for subtokens, preds in zip(subtokens_per_chunk, predictions):
@@ -148,50 +151,41 @@ def re_combine_documents(dataset, predictions):
         previous_token = ""
         previous_tag = ""
 
-        # print(f"\nsubtokens: {subtokens},\n\npreds: {preds}")
-
         # add dummy entries for the first and last token (makes iteration easier)
         preds = [-100] + preds + [-100]
 
         # iterate over sub-tokens and predictions and combine sub-tokens to
         # tokens and "sub"-predictions to tags
         for i, (sub_token, tag) in enumerate(zip(subtokens, preds)):
-            print(f"\nsubtoken: {sub_token}, tag: {tag}")
 
-            # ignore the [SEP] token
+            # ignore the <s> token
             if i == 0:
                 continue
             if sub_token in ("[PAD]", "[SEP]", "<pad>", "<sep>"):
                 re_combined_tokens.append(previous_token)
                 re_combined_tags.append(previous_tag)
-                # print("ignoring special token")
-                # continue
+
                 break  # changed for drug ner
-            if sub_token.startswith("##"):
-                # combine sub-tokens
-                previous_token += sub_token.replace("##", "")
-                # the previous tag stays the same
 
-            elif sub_token.startswith("▁"):
-                # combine sub-tokens
-                previous_token = sub_token.replace("▁", "")
-
-            elif not sub_token.startswith("▁"):
-                previous_token += sub_token
-
-            else:
+            if sub_token.startswith("▁"):
                 if previous_token != "":
                     re_combined_tokens.append(previous_token)
                     re_combined_tags.append(previous_tag)
-                previous_token = sub_token
+                # combine sub-tokens
+                previous_token = sub_token.replace("▁", "")
+                # always take the tag of the first part of the word (not so sure about that)
                 previous_tag = tag
+
+            elif sub_token == "</s>" and previous_token != "":
+
+                re_combined_tokens.append(previous_token)
+                re_combined_tags.append(previous_tag)
+
+            elif not sub_token.startswith("▁") and sub_token != "</s>":
+                previous_token += sub_token
 
         new_tokens.append(re_combined_tokens)
         tags.append(re_combined_tags)
-
-    # print(f"\nnew tokens: {new_tokens}")
-    # print(f"\ntags: {tags}")
-    # print("\n")
 
     # predictions is a list of predictions per chunk,
     # i.e. tokens per chunk and predictions should be always the same size
@@ -205,7 +199,7 @@ def re_combine_documents(dataset, predictions):
     for tokens, re_combined_tags, file_id in zip(new_tokens, tags, file_ids_per_chunk):
         print(file_id)
         file_name = file_id.split(DELIMITER)[0]
-        # print(f"tokens: {tokens}\nrecombined tags: {re_combined_tags}\n")
+
         if file_name != previous_file_name and previous_file_name != "":
             all_files.append(tokens_per_file)
             all_tags.append(tags_per_file)
@@ -221,13 +215,8 @@ def re_combine_documents(dataset, predictions):
         previous_file_name = file_name
 
     all_files.append(tokens_per_file)
-    # print(f"\nall tokens: {all_files}")
     all_tags.append(tags_per_file)
     txt_files.append(previous_file_name)
-
-    # print(f"all files: {all_files}")
-
-    # print(f"txt files: {txt_files}")
 
     # return a list of results per document
     return all_tags, all_files, txt_files
@@ -325,10 +314,6 @@ def re_combine_longformer_tokens(dataset, predictions):
     all_files.append(tokens_per_file)
     all_tags.append(tags_per_file)
     txt_files.append(previous_file_name)
-
-    # print(all_tags[:2])
-    # print("\n")
-    # print(all_files[:2])
 
     # return a list of results per document
     return all_tags, all_files, txt_files
