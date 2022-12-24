@@ -534,6 +534,8 @@ class DrugNER(object):
             cache_dir=self.config["cache_dir"],
         )
 
+        print(self.config["data_url"])
+
         # dataset = load_dataset('dfki-nlp/brat', **kwargs)
 
         if self.config["unify_tags"]:
@@ -543,6 +545,8 @@ class DrugNER(object):
 
         self.label2id = {l: i for i, l in enumerate(self.label_list)}
         self.id2label = {i: l for i, l in enumerate(self.label_list)}
+
+        print(datasets)
 
         # split the documents in chunks of x sentences (results in lists of lists of tokens)
         datasets = datasets.map(

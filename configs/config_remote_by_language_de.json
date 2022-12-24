@@ -1,9 +1,9 @@
 {
-  "data_url": "/netscratch/raithel/projects/cross_ling_drug_ner/converted/by_language",
+  "data_url": "/netscratch/raithel/projects/cross_ling_drug_ner/converted/by_language/de",
   "debug": false,
   "dev": "dev",
   "epochs": 50,
-  "out_dir": "/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de",
+  "out_dir": "/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr",
   "patience": 4,
   "remove_all_except_drug": true,
   "seed": 42,

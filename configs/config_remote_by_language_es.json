@@ -1,5 +1,5 @@
 {
-  "data_url": "/netscratch/raithel/projects/cross_ling_drug_ner/converted/by_language",
+  "data_url": "/netscratch/raithel/projects/cross_ling_drug_ner/converted/by_language/es",
   "debug": false,
   "dev": "dev",
   "epochs": 50,
