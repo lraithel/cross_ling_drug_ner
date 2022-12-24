@@ -585,8 +585,8 @@ class DrugNER(object):
                     "input_ids",
                     "token_type_ids",
                     "attention_mask",
-                    "sub_tokens",
-                    "file_ids",
+                    #"sub_tokens",
+                    #"file_ids",
                 ]
             ]
         )
