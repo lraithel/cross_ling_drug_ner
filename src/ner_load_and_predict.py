@@ -7,7 +7,7 @@ import torch
 
 from torch.utils.data import DataLoader
 
-from finetune_ner import DrugNER
+from finetune_ner_2 import DrugNER
 
 from transformers import AutoModelForTokenClassification
 from transformers import AutoTokenizer
@@ -153,75 +153,84 @@ def convert_documents_to_brat(
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser()
+    checkpoint_dirs = [
+        "/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_19_15",
+        "/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_19_13",
+        "/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_17_50",
+        "/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_23_14_40",
+        "/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_17_46",
+    ]
 
-    parser.add_argument("config", default=None, help="Path to config file.")
+    for checkpoint_dir in checkpoint_dirs:
 
-    args = parser.parse_args()
+        parser = argparse.ArgumentParser()
 
-    # get the model information (checkpoint, labels, label2id, etc.)
-    # checkpoint_dir = "outputs/checkpoint_xlm-roberta-base_22_12_20_13_00"
-    checkpoint_dir = "/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_19_15"
-    # get the config file of the model
-    checkpoint_config_file = os.path.join(checkpoint_dir, "config.json")
+        parser.add_argument("config", default=None, help="Path to config file.")
 
-    with open(checkpoint_config_file, "r") as read_handle:
-        cp_config = json.load(read_handle)
+        args = parser.parse_args()
 
-    drug_ner = DrugNER(args.config, mode="eval")
+        # get the model information (checkpoint, labels, label2id, etc.)
+        # checkpoint_dir = "outputs/checkpoint_xlm-roberta-base_22_12_20_13_00"
+        # get the config file of the model
+        checkpoint_config_file = os.path.join(checkpoint_dir, "config.json")
 
-    drug_ner.label_list = list(cp_config["id2label"].values())
-    # for some reason, the IDs are strings
-    drug_ner.label2id = {
-        int(key): value for key, value in cp_config["id2label"].items()
-    }
-    drug_ner.id2label = cp_config["label2id"]
+        with open(checkpoint_config_file, "r") as read_handle:
+            cp_config = json.load(read_handle)
 
-    # prepare the data (train & dev are prepared as well)
-    drug_ner.prepare_data(model=cp_config["_name_or_path"])
-    # if we already created a predictions file, we don't have to run everything
-    # again
-    if not os.path.isfile(os.path.join(checkpoint_dir, "predictions.json")):
+        drug_ner = DrugNER(args.config, mode="eval")
 
-        drug_ner.get_model(model=cp_config["_name_or_path"])
+        drug_ner.label_list = list(cp_config["id2label"].values())
+        # for some reason, the IDs are strings
+        drug_ner.label2id = {
+            int(key): value for key, value in cp_config["id2label"].items()
+        }
+        drug_ner.id2label = cp_config["label2id"]
 
-        trainer = load_model_from_checkpoint(
-            checkpoint_dir, drug_ner, batch_size=drug_ner.config["batch_size"]
+        # prepare the data (train & dev are prepared as well)
+        drug_ner.prepare_data(model=cp_config["_name_or_path"])
+        # if we already created a predictions file, we don't have to run everything
+        # again
+        if not os.path.isfile(os.path.join(checkpoint_dir, "predictions.json")):
+
+            drug_ner.get_model(model=cp_config["_name_or_path"])
+
+            trainer = load_model_from_checkpoint(
+                checkpoint_dir, drug_ner, batch_size=drug_ner.config["batch_size"]
+            )
+
+            predictions = predict(
+                model=trainer,
+                dataset=drug_ner.tokenized_datasets["test"],
+                label_list=drug_ner.label_list,
+            )
+
+            with open(os.path.join(checkpoint_dir, "predictions.json"), "w") as d:
+                json.dump({"predictions": predictions}, d)
+
+        else:
+
+            print("Opening existing predictions file.")
+            with open(os.path.join(checkpoint_dir, "predictions.json"), "r") as d:
+                predictions = json.load(d)["predictions"]
+
+        # transform the sentence chunks back to sentences per document
+        # `predictions` is a list of lists of tags
+        combined_predictions, combined_tokens, txt_files = utils.re_combine_documents(
+            drug_ner.tokenized_datasets["test"], predictions
         )
 
-        predictions = predict(
-            model=trainer,
-            dataset=drug_ner.tokenized_datasets["test"],
-            label_list=drug_ner.label_list,
+        dir_wo_string_matching = "predicted_annotations/"
+
+        output_dir_wosm = os.path.join(checkpoint_dir, dir_wo_string_matching)
+
+        if not os.path.exists(output_dir_wosm):
+            os.makedirs(output_dir_wosm)
+
+        convert_documents_to_brat(
+            predictions=combined_predictions,
+            tokens=combined_tokens,
+            txt_files=txt_files,
+            data_url=drug_ner.data_url,
+            output_dir=output_dir_wosm,
+            drugs=[],
         )
-
-        with open(os.path.join(checkpoint_dir, "predictions.json"), "w") as d:
-            json.dump({"predictions": predictions}, d)
-
-    else:
-
-        print("Opening existing predictions file.")
-        with open(os.path.join(checkpoint_dir, "predictions.json"), "r") as d:
-            predictions = json.load(d)["predictions"]
-
-    # transform the sentence chunks back to sentences per document
-    # `predictions` is a list of lists of tags
-    combined_predictions, combined_tokens, txt_files = utils.re_combine_documents(
-        drug_ner.tokenized_datasets["test"], predictions
-    )
-
-    dir_wo_string_matching = "predicted_annotations/"
-
-    output_dir_wosm = os.path.join(checkpoint_dir, dir_wo_string_matching)
-
-    if not os.path.exists(output_dir_wosm):
-        os.makedirs(output_dir_wosm)
-
-    convert_documents_to_brat(
-        predictions=combined_predictions,
-        tokens=combined_tokens,
-        txt_files=txt_files,
-        data_url=drug_ner.data_url,
-        output_dir=output_dir_wosm,
-        drugs=[],
-    )
