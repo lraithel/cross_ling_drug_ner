@@ -160,8 +160,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # get the model information (checkpoint, labels, label2id, etc.)
-    checkpoint_dir = "outputs/checkpoint_xlm-roberta-base_22_12_20_13_00"
-
+    # checkpoint_dir = "outputs/checkpoint_xlm-roberta-base_22_12_20_13_00"
+    checkpoint_dir = "/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_19_15"
     # get the config file of the model
     checkpoint_config_file = os.path.join(checkpoint_dir, "config.json")
 

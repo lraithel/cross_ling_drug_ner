@@ -1,6 +1,4 @@
-}
-
-  "seed": 42
+{ "seed": 42,
   "patience": 4,
   "model_name": "xlm-roberta-base",
   "learning_rate": 0.00002,
@@ -21,5 +19,5 @@
   "epochs": 50,
   "dev": "dev",
   "debug": false,
-  "data_url": "/netscratch/raithel/projects/cross_ling_drug_ner/converted/",
-{
+  "data_url": "/netscratch/raithel/projects/cross_ling_drug_ner/converted/"
+}
