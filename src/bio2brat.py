@@ -272,8 +272,10 @@ def parse_indices(idxstr):
 
 def convert(text_file, model_predictions, tokens):
     """..."""
-    with open(text_file, "r") as textf:
+    with open(text_file, "r", encoding="utf-8") as textf:
+
         text = textf.read()
+        text = unicodedata.normalize("NFKD", text)
 
     bio_str = ""
 
