@@ -7,7 +7,7 @@ import torch
 
 from torch.utils.data import DataLoader
 
-from finetune_ner_2 import DrugNER
+from fine_tune_ner_2 import DrugNER
 
 from transformers import AutoModelForTokenClassification
 from transformers import AutoTokenizer
@@ -130,7 +130,7 @@ def convert_documents_to_brat(
 
         print(f"Current text file: {txt_file}")
         # path_to_text = os.path.join(data_url, "dev", txt_file + ".txt")
-        path_to_text = os.path.join(data_url, "test_test", txt_file + ".txt")
+        path_to_text = os.path.join(data_url, "test", txt_file + ".txt")
 
         # returns a list of annotation strings
         brat_anno, bio_str = convert(
