@@ -5,6 +5,9 @@ import os
 import re
 import torch
 
+import unicodedata
+
+
 from torch.utils.data import DataLoader
 
 from fine_tune_ner_2 import DrugNER
@@ -116,6 +119,9 @@ def write_conll(output_dir, conll_str, file_name):
         os.makedirs(conll_anno_dir)
 
     with open(os.path.join(conll_anno_dir, file_name), "w") as conll_handle:
+
+        conll_str = unicodedata.normalize("NFKD", conll_str)
+
         conll_handle.write(conll_str)
 
 
@@ -147,7 +153,9 @@ def convert_documents_to_brat(
         # create one file for every document
         with open(path, "w") as write_handle:
             for line in brat_anno:
-                write_handle.write(str(line))
+                line = unicodedata.normalize("NFKD", str(line))
+
+                write_handle.write(line)
                 write_handle.write("\n")
 
 
