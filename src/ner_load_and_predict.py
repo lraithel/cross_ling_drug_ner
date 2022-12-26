@@ -122,7 +122,7 @@ def write_conll(output_dir, conll_str, file_name):
 
         conll_str = unicodedata.normalize("NFKD", conll_str)
 
-        conll_handle.write(conll_str)
+        conll_handle.write(conll_str.encode("utf-8"))
 
 
 def convert_documents_to_brat(
@@ -155,7 +155,7 @@ def convert_documents_to_brat(
             for line in brat_anno:
                 line = unicodedata.normalize("NFKD", str(line))
 
-                write_handle.write(line)
+                write_handle.write(line.encode("utf-8"))
                 write_handle.write("\n")
 
 
