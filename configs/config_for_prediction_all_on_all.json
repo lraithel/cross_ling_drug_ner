@@ -1,0 +1,25 @@
+}
+
+  "seed": 42
+  "patience": 4,
+  "model_name": "xlm-roberta-base",
+  "learning_rate": 0.00002,
+  "chunk_sentences": true,
+
+  "batch_size": 8,
+  "num_sentences": 26,
+  "cache_dir": "/netscratch/raithel/projects/cross_ling_drug_ner/",
+  "save_best_model": true,
+  "use_wandb": true,
+  "unify_tags": true,
+  "train": "train",
+  "test": "test",
+  "seed": 42,
+  "remove_all_except_drug": true,
+  "patience": 4,
+  "out_dir": "/netscratch/raithel/projects/cross_ling_drug_detection/models/",
+  "epochs": 50,
+  "dev": "dev",
+  "debug": false,
+  "data_url": "/netscratch/raithel/projects/cross_ling_drug_ner/converted/",
+{
