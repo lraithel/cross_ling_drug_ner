@@ -221,37 +221,11 @@ def convert_documents_to_brat(
 if __name__ == "__main__":
 
     checkpoint_dirs = [
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/all_on_all/final_models_all_on_all/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_17_46",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/all_on_all/final_models_all_on_all/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_17_50",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/all_on_all/final_models_all_on_all/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_19_13",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/all_on_all/final_models_all_on_all/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_19_15",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/all_on_all/final_models_all_on_all/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_23_14_40",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_en/mono_en_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_15_33",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_en/mono_en_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_15_52",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_en/mono_en_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_10",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_en/mono_en_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_24",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_en/mono_en_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_42",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_de/mono_de_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_13_56",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_de/mono_de_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_16_10",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_de/mono_de_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_17_47",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_de/mono_de_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_19_12",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_de/mono_de_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_20_59",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_fr/mono_fr_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_39",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_f/rmono_fr_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_51",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_fr/mono_fr_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_07",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_fr/mono_fr_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_18",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_fr/mono_fr_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_32",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_13_56",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_16_10",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_17_47",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_19_12",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_20_59",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_17_46",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_17_50",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_19_13",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_19_15",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_23_14_40",
-
+        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/mono_de_models_with_preds/checkpoint_xlm-roberta-base_22_12_24_13_56",
+        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/mono_de_models_with_preds/checkpoint_xlm-roberta-base_22_12_24_16_10",
+        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/mono_de_models_with_preds/checkpoint_xlm-roberta-base_22_12_24_17_47",
+        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/mono_de_models_with_preds/checkpoint_xlm-roberta-base_22_12_24_19_12",
+        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/mono_de_models_with_preds/checkpoint_xlm-roberta-base_22_12_24_20_59",
     ]
 
     for no, checkpoint_dir in enumerate(checkpoint_dirs):
@@ -321,7 +295,9 @@ if __name__ == "__main__":
                 y_true=true_labels, y_pred=predictions, output_dict=False
             )
         )
-        continue
+
+        # continue
+
         # transform the sentence chunks back to sentences per document
         # `predictions` is a list of lists of tags
         combined_predictions, combined_tokens, txt_files = utils.re_combine_documents(

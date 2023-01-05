@@ -3,7 +3,8 @@ import json
 import os
 
 from bio2brat import convert
-from finetune_ner import DrugNER
+from fine_tune_ner_2 import DrugNER
+from ner_load_and_predict import write_conll
 from utils import utils
 
 import re
@@ -53,32 +54,36 @@ def get_string_matches(annos, path_to_text, drugs, drug_length=3):
 
 
 def convert_documents_to_brat(
-    predictions, tokens, txt_files, data_url, output_dir, drugs=[], drug_length=3
+    predictions, tokens, txt_files, data_url, output_dir, test_data_identifier
 ):
     """Convert every given document to a brat file."""
     # convert the predictions per document back to brat documents
+    print("\nConverting documents to brat ...\n")
     for prediction, tokens, txt_file in zip(predictions, tokens, txt_files):
 
         assert len(tokens) == len(prediction)
-        path_to_text = os.path.join(data_url, "release1", txt_file + ".txt")
+
+        print(f"Current text file: {txt_file}")
+        # path_to_text = os.path.join(data_url, "dev", txt_file + ".txt")
+        path_to_text = os.path.join(data_url, test_data_identifier, txt_file + ".txt")
+
         # returns a list of annotation strings
         brat_anno, bio_str = convert(
             text_file=path_to_text, model_predictions=prediction, tokens=tokens
         )
-        if drugs:
-            brat_anno = get_string_matches(
-                annos=brat_anno,
-                path_to_text=path_to_text,
-                drugs=drugs,
-                drug_length=drug_length,
-            )
 
         file_name = os.path.basename(txt_file).split(".txt")[0]
+        write_conll(
+            output_dir=output_dir, conll_str=bio_str, file_name=f"{file_name}.conll"
+        )
+
         path = os.path.join(output_dir, f"{file_name}.ann")
 
         # create one file for every document
         with open(path, "w") as write_handle:
             for line in brat_anno:
+                # line = unicodedata.normalize("NFKD", str(line))
+
                 write_handle.write(str(line))
                 write_handle.write("\n")
 
@@ -112,7 +117,7 @@ def merge_predictions(pred_1, pred_2):
             if agree_2(tag1, tag2):
                 # print("tag1 = tag2")
                 agreed_tag = tag1
-                print(f"agreed: {tag1} vs. {tag2} --> {agreed_tag}")
+                # print(f"agreed: {tag1} vs. {tag2} --> {agreed_tag}")
 
             elif not agree_2(tag1, tag2):
                 not_agreed_counter += 1
@@ -229,9 +234,9 @@ def merge_predictions_5_models(pred_1, pred_2, pred_3, pred_4, pred_5):
                 # else:
                 #     assert False
 
-                print(
-                    f"did not agree: {tag1} vs. {tag2} vs. {tag3}  vs. {tag4} vs. {tag5} --> {agreed_tag}"
-                )
+                # print(
+                #     f"did not agree: {tag1} vs. {tag2} vs. {tag3}  vs. {tag4} vs. {tag5} --> {agreed_tag}"
+                # )
 
             # elif agree_2(tag2):
             #     # print("tag2 = tag3")
@@ -271,11 +276,9 @@ if __name__ == "__main__":
     parser.add_argument("model_4", default=None, help="model path 4.")
     parser.add_argument("model_5", default=None, help="model path 5.")
 
-    # parser.add_argument("model_3", default=None, help="model path 3.")
-
-    parser.add_argument("drug_length", default=3, nargs="+", type=int)
-
     args = parser.parse_args()
+
+    assert args.model_1 != args.model_2 != args.model_3 != args.model_4 != args.model_5
 
     with open(os.path.join(args.model_1, "predictions.json"), "r") as d:
         predictions_1 = json.load(d)["predictions"]
@@ -291,9 +294,6 @@ if __name__ == "__main__":
 
     with open(os.path.join(args.model_5, "predictions.json"), "r") as d:
         predictions_5 = json.load(d)["predictions"]
-
-    # with open(os.path.join(args.model_3, "predictions.json"), "r") as d:
-    #     predictions_3 = json.load(d)["predictions"]
 
     drug_ner = DrugNER(args.config)
 
@@ -324,9 +324,12 @@ if __name__ == "__main__":
         drug_ner.tokenized_datasets["test"], merged_predictions
     )
 
-    dir_wo_string_matching = "ensemble_all_on_all/"
+    dir_wo_string_matching = "ensemble"
 
-    output_dir_wosm = os.path.join("models/final/", dir_wo_string_matching)
+    # models_ensembled/mono_de_models_with_preds/checkpoint_xlm-roberta-base_22_12_24_13_56
+    path = "/".join(args.model_1.split("/")[:2])
+    print(path)
+    output_dir_wosm = os.path.join(path, dir_wo_string_matching)
 
     if not os.path.exists(output_dir_wosm):
         os.makedirs(output_dir_wosm)
@@ -337,5 +340,5 @@ if __name__ == "__main__":
         txt_files=txt_files,
         data_url=drug_ner.data_url,
         output_dir=output_dir_wosm,
-        drugs=[],
+        test_data_identifier=drug_ner.config["test"],
     )

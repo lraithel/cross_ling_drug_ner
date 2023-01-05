@@ -1,6 +1,7 @@
 data/
 outputs/
 models_final/
+models_ensembled/
 wandb/
 
 *.yaml
