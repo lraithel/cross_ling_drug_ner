@@ -510,15 +510,15 @@ class DrugNER(object):
         datasets = load_dataset(
             path_to_loader,
             subdirectory_mapping={
-                # self.config["train"]: "train",
-                # self.config["dev"]: "dev",
+                self.config["train"]: "train",
+                self.config["dev"]: "dev",
                 self.config["test"]: "test",
             },
             url=self.config["data_url"],
             unify_tags=self.config["unify_tags"],
             remove_all_except_drug=self.config["remove_all_except_drug"],
             # cache_dir="../.cache/huggingface/datasets",
-            # download_mode="force_redownload",
+            download_mode="force_redownload",
             cache_dir=self.config["cache_dir"],
         )
 
@@ -527,9 +527,9 @@ class DrugNER(object):
         # dataset = load_dataset('dfki-nlp/brat', **kwargs)
 
         if self.config["unify_tags"]:
-            self.label_list = datasets["test"].features["ner_tags"].feature.names
+            self.label_list = datasets["train"].features["ner_tags"].feature.names
         else:
-            self.label_list = datasets["test"].features["token_labels"].feature.names
+            self.label_list = datasets["train"].features["token_labels"].feature.names
 
         self.label2id = {l: i for i, l in enumerate(self.label_list)}
         self.id2label = {i: l for i, l in enumerate(self.label_list)}
@@ -544,7 +544,7 @@ class DrugNER(object):
                 "unify_tags": self.config["unify_tags"],
             },
             batched=True,
-            remove_columns=datasets["test"].column_names,
+            remove_columns=datasets["train"].column_names,
         )
         # print(f"chunk tokens: {datasets['test']['chunks_tokens']}\n")
 
@@ -569,7 +569,7 @@ class DrugNER(object):
         self.tokenized_datasets = self.tokenized_datasets.remove_columns(
             [
                 col
-                for col in self.tokenized_datasets["test"].features
+                for col in self.tokenized_datasets["train"].features
                 if col
                 not in [
                     "labels",
