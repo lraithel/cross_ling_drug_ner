@@ -2,9 +2,9 @@ import argparse
 import json
 import numpy as np
 import os
+import pandas as pd
 import re
 import torch
-
 import unicodedata
 
 
@@ -18,15 +18,25 @@ from transformers import DataCollatorForTokenClassification
 from transformers import Trainer
 from transformers import TrainingArguments
 
+import evaluate
+
 from bio2brat import convert
+from seqeval.metrics import classification_report
+
 from utils import utils
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
+with open("src/utils/lang_dict.json", "r") as read_handle:
+    lang2id = json.load(read_handle)
+    id2lang = {value: key for key, value in lang2id.items()}
 
-def predict(model, dataset, label_list):
+
+def predict(model, dataset, label_list, reports_file):
     """..."""
     print("Final predictions on test set ...")
+    languages = dataset["language"]
+    reports = {}
 
     output = model.predict(dataset)
     predictions = np.argmax(output[0], axis=2)
@@ -41,6 +51,54 @@ def predict(model, dataset, label_list):
         [label_list[l] for (p, l) in zip(prediction, label) if l != -100]
         for prediction, label in zip(predictions, labels)
     ]
+
+    # load the traditional and "fair" eval metrics
+    trad_eval = evaluate.load("seqeval")
+    fair_eval = evaluate.load("hpi-dhc/FairEval", suffix=False, scheme="IOB2")
+
+    cls_report = classification_report(
+        y_true=true_labels, y_pred=converted_predictions, output_dict=True
+    )
+    reports["classification_report"] = cls_report
+
+    sorted_by_language = utils.sort_by_language(
+        predictions=converted_predictions, labels=true_labels, languages=languages
+    )
+
+    for language, outputs in sorted_by_language.items():
+
+        results_trad_per_lang = trad_eval.compute(
+            predictions=outputs["predictions"],
+            references=outputs["true_labels"],
+            suffix=False,
+        )
+
+        reports[f"{id2lang[language]}_traditional"] = results_trad_per_lang
+
+        try:
+            results_fair_per_lang = fair_eval.compute(
+                predictions=outputs["predictions"],
+                references=outputs["true_labels"],
+                mode="fair",
+                error_format="count",
+            )
+
+            reports[f"{id2lang[language]}_fair"] = results_fair_per_lang
+
+        except ValueError:
+            print(f"Warning: could not get results for language '{id2lang[language]}'")
+            pass
+
+    for key, results_dict in reports.items():
+        print(f"\n{key}")
+        try:
+            df = pd.DataFrame.from_dict(results_dict)
+            df.to_csv(reports_file + f"_{key}.csv")
+            print(df)
+            print("\n\n")
+        except ValueError as e:
+            print(e)
+            pass
 
     return converted_predictions
 
@@ -68,11 +126,6 @@ def load_model_from_checkpoint(path_to_checkpoint, trainer, batch_size):
     # )
 
     return trainer
-
-
-# def load_model_from_checkpoint(path_to_checkpoint, batch_size):
-#     """..."""
-#     pass
 
 
 def get_string_matches(annos, path_to_text, drugs, drug_length=3):
@@ -120,23 +173,27 @@ def write_conll(output_dir, conll_str, file_name):
 
     with open(os.path.join(conll_anno_dir, file_name), "w") as conll_handle:
 
-        conll_str = unicodedata.normalize("NFKD", conll_str)
-
-        conll_handle.write(conll_str.encode("utf-8"))
+        # conll_str = unicodedata.normalize("NFKD", conll_str)
+        try:
+            conll_handle.write(conll_str)
+        except TypeError as e:
+            print(f"'{conll_str}'")
+            raise e
 
 
 def convert_documents_to_brat(
-    predictions, tokens, txt_files, data_url, output_dir, drugs=[], drug_length=3
+    predictions, tokens, txt_files, data_url, output_dir, test_data_identifier
 ):
     """Convert every given document to a brat file."""
     # convert the predictions per document back to brat documents
+    print("\nConverting documents to brat ...\n")
     for prediction, tokens, txt_file in zip(predictions, tokens, txt_files):
 
         assert len(tokens) == len(prediction)
 
         print(f"Current text file: {txt_file}")
         # path_to_text = os.path.join(data_url, "dev", txt_file + ".txt")
-        path_to_text = os.path.join(data_url, "test", txt_file + ".txt")
+        path_to_text = os.path.join(data_url, test_data_identifier, txt_file + ".txt")
 
         # returns a list of annotation strings
         brat_anno, bio_str = convert(
@@ -153,23 +210,40 @@ def convert_documents_to_brat(
         # create one file for every document
         with open(path, "w") as write_handle:
             for line in brat_anno:
-                line = unicodedata.normalize("NFKD", str(line))
+                # line = unicodedata.normalize("NFKD", str(line))
 
-                write_handle.write(line.encode("utf-8"))
+                write_handle.write(str(line))
                 write_handle.write("\n")
 
 
 if __name__ == "__main__":
 
     checkpoint_dirs = [
-        "/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_19_15",
-        "/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_19_13",
-        "/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_17_50",
-        "/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_23_14_40",
-        "/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_17_46",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/all_on_all/final_models_all_on_all/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_17_46",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/all_on_all/final_models_all_on_all/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_17_50",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/all_on_all/final_models_all_on_all/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_19_13",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/all_on_all/final_models_all_on_all/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_19_15",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/all_on_all/final_models_all_on_all/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_23_14_40",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_en/mono_en_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_15_33",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_en/mono_en_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_15_52",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_en/mono_en_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_10",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_en/mono_en_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_24",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_en/mono_en_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_42",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_de/mono_de_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_13_56",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_de/mono_de_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_16_10",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_de/mono_de_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_17_47",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_de/mono_de_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_19_12",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_de/mono_de_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_20_59",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_fr/mono_fr_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_39",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_f/rmono_fr_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_51",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_fr/mono_fr_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_07",
+        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_fr/mono_fr_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_18",
+        "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_fr/mono_fr_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_32",
     ]
 
-    for checkpoint_dir in checkpoint_dirs:
+    for no, checkpoint_dir in enumerate(checkpoint_dirs):
+
+        print(f"\nRunning model nr. {no + 1}/{len(checkpoint_dirs)} for inference.\n")
 
         parser = argparse.ArgumentParser()
 
@@ -210,6 +284,7 @@ if __name__ == "__main__":
                 model=trainer,
                 dataset=drug_ner.tokenized_datasets["test"],
                 label_list=drug_ner.label_list,
+                reports_file=os.path.join(checkpoint_dir, "report"),
             )
 
             with open(os.path.join(checkpoint_dir, "predictions.json"), "w") as d:
@@ -220,6 +295,19 @@ if __name__ == "__main__":
             print("Opening existing predictions file.")
             with open(os.path.join(checkpoint_dir, "predictions.json"), "r") as d:
                 predictions = json.load(d)["predictions"]
+
+        # print(f"predictions:\n{predictions}\n")
+        true_labels = [
+            [drug_ner.label_list[l] for l in label if l != -100]
+            for label in drug_ner.tokenized_datasets["test"]["labels"]
+        ]
+        # print(f"\nlabels:\n{true_labels}\n")
+
+        print(
+            classification_report(
+                y_true=true_labels, y_pred=predictions, output_dict=False
+            )
+        )
 
         # transform the sentence chunks back to sentences per document
         # `predictions` is a list of lists of tags
@@ -240,5 +328,5 @@ if __name__ == "__main__":
             txt_files=txt_files,
             data_url=drug_ner.data_url,
             output_dir=output_dir_wosm,
-            drugs=[],
+            test_data_identifier=drug_ner.config["test"],
         )

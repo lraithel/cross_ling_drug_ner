@@ -20,6 +20,17 @@ with open("src/utils/lang_dict.json", "r") as read_handle:
 #     print(f"GPU memory occupied: {info.used//1024**2} MB.")
 
 
+def sort_by_language(predictions, labels, languages):
+    """Make one set of predictions-labels for each language."""
+    by_language = {lang: {"predictions": [], "true_labels": []} for lang in languages}
+
+    for pred, label, language in zip(predictions, labels, languages):
+        by_language[language]["predictions"].append(pred)
+        by_language[language]["true_labels"].append(label)
+
+    return by_language
+
+
 def _count_number_of_entities(doc):
     """Count the number of found non-O tags and annotated spans."""
     print("Counting number of NER tags.")
@@ -89,6 +100,7 @@ def chunk_documents(documents, num_sentences=3, unify_tags=False):
                 row[i : i + num_sentences] for i in range(0, len(row), num_sentences)
             ]
 
+    # print(chunks_tokens)
     return {
         "chunks_tokens": chunks_tokens,
         "chunks_tags": chunks_tags,
@@ -107,6 +119,8 @@ def combine_x_sentences(documents):
 
     for row in documents["chunks_tags"]:
         chunks_tags_resolved.append(list(chain(*row)))
+
+    # print(chunks_tokens_resolved)
 
     return {
         "chunks_tokens": chunks_tokens_resolved,
@@ -197,7 +211,7 @@ def re_combine_documents(dataset, predictions):
     previous_file_name = ""
 
     for tokens, re_combined_tags, file_id in zip(new_tokens, tags, file_ids_per_chunk):
-        print(file_id)
+        # print(file_id)
         file_name = file_id.split(DELIMITER)[0]
 
         if file_name != previous_file_name and previous_file_name != "":

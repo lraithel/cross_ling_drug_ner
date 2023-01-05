@@ -17,7 +17,6 @@ from collections import defaultdict, namedtuple
 from os import listdir, path
 from typing import Dict, List, Optional
 import spacy
-from spacy.training import offsets_to_biluo_tags
 import re
 import os
 
@@ -339,6 +338,7 @@ class Brat(datasets.GeneratorBasedBuilder):
             "MEDICATION",
             "substance",
             "CHEM",
+            "Drug",
         ]
 
         for variant in tag_variations:
@@ -390,17 +390,18 @@ class Brat(datasets.GeneratorBasedBuilder):
             "Substance",
             "Medication",
             "MEDICATION",
-            "substance",
+            "substance",  # seems to be not really related to medication
             "CHEM",
             "NORMALIZABLES",
             "NO_NORMALIZABLES",
+            "Drug",
         ]
         options.no_sentence_split = False  # this is not done very well
         options.exclude = None
         options.tokenization = "default"
         options.tagset = None  # default = BIO
 
-        # returns a conll-style string per file
+        # returns a conll-style string per file; prepended with the file name
         data = get_converted_files(files, options)
 
         # for a manual check of conll tags
@@ -419,7 +420,11 @@ class Brat(datasets.GeneratorBasedBuilder):
                 {"tokens": [], "token_labels": [], "ner_tags": [], "language": ""}
             )
 
+            # get the corresponding txt file
             txt_fn = f"{files_without_ext[i]}.{self.config.txt_file_extension}"
+
+            with open(txt_fn, "r", encoding="utf-8") as read_handle:
+                txt_content = read_handle.read()
 
             # the language is encoded at the very beginning of the files,
             # e.g. de_some_corpus.txt
@@ -427,15 +432,12 @@ class Brat(datasets.GeneratorBasedBuilder):
                 0
             ]
 
-            with open(txt_fn, "r", encoding="utf-8") as read_handle:
-                txt_content = read_handle.read()
-
             annotations["context"] = txt_content
 
-            sent_count = 0
-            chunk_count = 0
-            # split the conll string to lines
+            # split the conll string to lines, i.e. one line looks like this:
+            # "token \t tag"
             lines = content_str.split("\n")
+            # remove the file name
             file_name = lines.pop(0).strip()
             annotations["file_name"] = file_name.replace("# doc_id = ", "")
             last_line = None

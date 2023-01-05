@@ -219,18 +219,6 @@ class DrugNER(object):
 
             return tokenized_inputs
 
-    def sort_by_language(self, predictions, labels, languages):
-        """Make one set of predictions-labels for each language."""
-        by_language = {
-            lang: {"predictions": [], "true_labels": []} for lang in languages
-        }
-
-        for pred, label, language in zip(predictions, labels, languages):
-            by_language[language]["predictions"].append(pred)
-            by_language[language]["true_labels"].append(label)
-
-        return by_language
-
     def compute_metrics(self, predictions, labels, languages):
         """Compute metrics for sequence labeling.
 
@@ -262,7 +250,7 @@ class DrugNER(object):
             [self.label_list[l] for (p, l) in zip(prediction, label) if l != -100]
             for prediction, label in zip(predictions, labels)
         ]
-        sorted_by_language = self.sort_by_language(
+        sorted_by_language = utils.sort_by_language(
             predictions=cleaned_predictions, labels=true_labels, languages=languages
         )
         for language, outputs in sorted_by_language.items():
@@ -589,8 +577,8 @@ class DrugNER(object):
                     "input_ids",
                     "token_type_ids",
                     "attention_mask",
-                    #"sub_tokens",
-                    #"file_ids",
+                    # "sub_tokens",
+                    # "file_ids",
                 ]
             ]
         )

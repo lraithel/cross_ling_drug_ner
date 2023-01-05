@@ -219,18 +219,6 @@ class DrugNER(object):
 
             return tokenized_inputs
 
-    def sort_by_language(self, predictions, labels, languages):
-        """Make one set of predictions-labels for each language."""
-        by_language = {
-            lang: {"predictions": [], "true_labels": []} for lang in languages
-        }
-
-        for pred, label, language in zip(predictions, labels, languages):
-            by_language[language]["predictions"].append(pred)
-            by_language[language]["true_labels"].append(label)
-
-        return by_language
-
     def compute_metrics(self, predictions, labels, languages):
         """Compute metrics for sequence labeling.
 
@@ -262,7 +250,7 @@ class DrugNER(object):
             [self.label_list[l] for (p, l) in zip(prediction, label) if l != -100]
             for prediction, label in zip(predictions, labels)
         ]
-        sorted_by_language = self.sort_by_language(
+        sorted_by_language = utils.sort_by_language(
             predictions=cleaned_predictions, labels=true_labels, languages=languages
         )
         for language, outputs in sorted_by_language.items():
@@ -522,15 +510,15 @@ class DrugNER(object):
         datasets = load_dataset(
             path_to_loader,
             subdirectory_mapping={
-                self.config["train"]: "train",
-                self.config["dev"]: "dev",
+                # self.config["train"]: "train",
+                # self.config["dev"]: "dev",
                 self.config["test"]: "test",
             },
             url=self.config["data_url"],
             unify_tags=self.config["unify_tags"],
             remove_all_except_drug=self.config["remove_all_except_drug"],
             # cache_dir="../.cache/huggingface/datasets",
-            download_mode="force_redownload",
+            # download_mode="force_redownload",
             cache_dir=self.config["cache_dir"],
         )
 
@@ -539,9 +527,9 @@ class DrugNER(object):
         # dataset = load_dataset('dfki-nlp/brat', **kwargs)
 
         if self.config["unify_tags"]:
-            self.label_list = datasets["train"].features["ner_tags"].feature.names
+            self.label_list = datasets["test"].features["ner_tags"].feature.names
         else:
-            self.label_list = datasets["train"].features["token_labels"].feature.names
+            self.label_list = datasets["test"].features["token_labels"].feature.names
 
         self.label2id = {l: i for i, l in enumerate(self.label_list)}
         self.id2label = {i: l for i, l in enumerate(self.label_list)}
@@ -556,7 +544,7 @@ class DrugNER(object):
                 "unify_tags": self.config["unify_tags"],
             },
             batched=True,
-            remove_columns=datasets["train"].column_names,
+            remove_columns=datasets["test"].column_names,
         )
         # print(f"chunk tokens: {datasets['test']['chunks_tokens']}\n")
 
@@ -581,7 +569,7 @@ class DrugNER(object):
         self.tokenized_datasets = self.tokenized_datasets.remove_columns(
             [
                 col
-                for col in self.tokenized_datasets["train"].features
+                for col in self.tokenized_datasets["test"].features
                 if col
                 not in [
                     "labels",

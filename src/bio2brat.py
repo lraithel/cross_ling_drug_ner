@@ -64,9 +64,13 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
 
     taggedTokens = []
 
-    BIOlines = [unicodedata.normalize("NFKD", token) for token in BIOlines]
-    reftext = unicodedata.normalize("NFKD", reftext)
+    # BIOlines = [unicodedata.normalize("NFKD", token) for token in BIOlines]
+    # reftext = unicodedata.normalize("NFKD", reftext)
 
+    # print(BIOlines[:150])
+    # print(reftext[:1000])
+
+    # ref and bio indices
     ri, bi = 0, 0
     while ri < len(reftext):
         if bi >= len(BIOlines):
@@ -119,14 +123,56 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
                 ri += 1
 
             # verify that the text matches the original
-            # assert (
-            #     reftext.lower()[ri : ri + len(tokentext)] == tokentext.lower()
-            # ), f"ERROR: text mismatch: reference '{reftext.lower()[ri : ri + len(tokentext)].encode('UTF-8')}' tagged '{tokentext.lower().encode('UTF-8')}\n{reftext[ri - 100 : ri + len(tokentext) + 100]}'"#;\n{reftext[ri - 100 : ri + len(tokentext) + 100]}\n{BIOlines[bi - 1]}\n{BIOline}\n{BIOlines[bi+1]}" #\n{reftext}\n{BIOlines}
             if reftext.lower()[ri : ri + len(tokentext)] != tokentext.lower():
                 print(
-                    f"ERROR: text mismatch: reference '{reftext.lower()[ri : ri + len(tokentext)].encode('UTF-8')}' tagged '{tokentext.lower().encode('UTF-8')}'"
-                )  # ;\n{reftext[ri - 100 : ri + len(tokentext) + 100]}\n{BIOlines[bi - 1]}\n{BIOline}\n{BIOlines[bi+1]}" #\n{reftext}\n{BIOlines}
-                break
+                    f"WARNING: text mismatch: reference '{reftext.lower()[ri : ri + len(tokentext) + 20].encode('UTF-8')}' tagged '{tokentext.lower().encode('UTF-8')}'"
+                )
+                normalized_ref = unicodedata.normalize(
+                    "NFKD", reftext[ri : ri + len(tokentext)]
+                )
+                normalized_tokentext = unicodedata.normalize("NFKD", tokentext)
+                # if the normalized versions do not correspond, raise an error
+
+                if normalized_ref != normalized_tokentext:
+
+                    # try another hack, strings might be including each other
+                    if len(normalized_ref) >= len(normalized_tokentext):
+                        start_of_tokentext = normalized_ref.find(normalized_tokentext)
+                        ri = start_of_tokentext
+                    else:
+                        start_of_ref = normalized_tokentext.find(normalized_ref)
+                        ri = start_of_ref
+
+                    # assert (
+                    #     False
+                    # ), f"WARNING: text mismatch: reference '{normalized_ref}' tagged '{normalized_tokentext}'"
+
+                    # # continue
+                    # # assert False, "text mismatch"
+                    # # find position of tokentext in reftext -- if it is not
+                    # # too far away, skip to it, i.e. increase ri
+                    # current_ref = reftext[ri : ri + len(tokentext) + 20]
+                    # start_current_ref = reftext.find(current_ref)
+                    # # print(f"start current ref: {start_current_ref}")
+                    # # find occurrence of token text in window
+                    # window_size = 400
+                    # new_ri = -1
+                    # while new_ri == -1:
+                    #     # print(f"window size: {window_size}")
+                    #     if window_size <= 0:
+                    #         break
+                    #     new_ri = reftext.find(
+                    #         tokentext, start_current_ref + window_size
+                    #     )
+                    #     # print(f"new_ri: {new_ri}")
+                    #     # decrease the window size if the
+                    #     window_size -= 50
+
+                    # # print(f"UPDATING ri: {new_ri}")
+                    # # update the current ri
+                    # if new_ri != -1:
+                    #     ri = new_ri
+                    # print(f"appending {(ri, ri + len(tokentext), ttag, ttype)}")
 
             # store tagged token as (begin, end, tag, tagtype) tuple.
             taggedTokens.append((ri, ri + len(tokentext), ttag, ttype))
@@ -154,6 +200,7 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
         print(
             f"ERROR: failed alignment: '{reftext[ri:]}' remains in reference, '{BIOlines[bi:]}' in tagged"
         )
+        # assert False, "failed alignment"
 
     standoff_entities = []
 
@@ -183,7 +230,9 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
 
     prevTag, prevEnd = "O", 0
     currType, currStart = None, None
+
     for startoff, endoff, ttag, ttype in taggedTokens:
+
         if prevTag != "O" and ttag != "I":
             # previous entity does not continue into this tag; output
             assert currType is not None and currStart is not None, "ERROR in %s" % fn
@@ -193,7 +242,7 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
             # separately
             if "\n" in reftext[currStart:prevEnd]:
                 ent = reftext[currStart:prevEnd]
-                ent_list = re.split("(\W)", ent)
+                ent_list = re.split(r"(\W)", ent)
 
                 for i, e in enumerate(ent_list):
                     if e not in ("\n", "", "\t", " "):
@@ -204,19 +253,75 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
                             next_free_id_idx,
                             reftext,
                         )
-                        standoff_entities.append(tg)
+
+                        if len(reftext[currStart:prevEnd]) > 2:
+                            # print("\nWEIRD entitiy")
+                            # print(
+                            #     currStart,
+                            #     prevEnd,
+                            #     currType,
+                            #     next_free_id_idx,
+                            #     reftext[currStart:prevEnd],
+                            # )
+                            # print("~~~~~~~~~~~\n")
+
+                            standoff_entities.append(tg)
 
                         next_free_id_idx += 1
                         currStart = currStart + len(e)
                     else:
                         currStart = currStart + len(e)
 
-            else:
-                standoff_entities.append(
-                    taggedEntity(
-                        currStart, prevEnd, currType, next_free_id_idx, reftext
-                    )
+            # check for trailing white space
+            elif reftext[currStart:prevEnd] != reftext[currStart:prevEnd].strip():
+                # use split to get the single white spaces
+                ent_list = reftext[currStart:prevEnd].split(" ")
+                ent = reftext[currStart:prevEnd].strip()
+
+                num_beginning = 0
+                num_end = 0
+                hit_token = False
+
+                for element in ent_list:
+                    if element == " ":
+                        if not hit_token:
+                            num_beginning += 1
+                        if hit_token:
+                            break
+                    elif element != " ":
+                        hit_token = True
+
+                for element in ent_list[::-1]:
+                    if element == " ":
+                        if not hit_token:
+                            num_end += 1
+                        if hit_token:
+                            break
+                    elif element != " ":
+                        hit_token = True
+
+                correct_length = len(ent)
+                print(
+                    f"correcting currStart from {currStart} to {currStart + num_beginning}"
                 )
+                currStart = currStart + num_beginning
+
+            else:
+                if len(reftext[currStart:prevEnd]) > 2:
+                    #     print("\nWEIRD entitiy")
+                    #     print(
+                    #         currStart,
+                    #         prevEnd,
+                    #         currType,
+                    #         next_free_id_idx,
+                    #         reftext[currStart:prevEnd],
+                    #     )
+                    #     print("~~~~~~~~~~~\n")
+                    standoff_entities.append(
+                        taggedEntity(
+                            currStart, prevEnd, currType, next_free_id_idx, reftext
+                        )
+                    )
 
                 next_free_id_idx += 1
 
@@ -242,9 +347,19 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
     # if there's an open entity after all tokens have been processed,
     # we need to output it separately
     if prevTag != "O":
-        standoff_entities.append(
-            taggedEntity(currStart, prevEnd, currType, next_free_id_idx, reftext)
-        )
+        if len(reftext[currStart:prevEnd]) > 2:
+            # print("\nWEIRD entitiy")
+            # print(
+            #     currStart,
+            #     prevEnd,
+            #     currType,
+            #     next_free_id_idx,
+            #     reftext[currStart:prevEnd],
+            # )
+            # print("~~~~~~~~~~~\n")
+            standoff_entities.append(
+                taggedEntity(currStart, prevEnd, currType, next_free_id_idx, reftext)
+            )
         next_free_id_idx += 1
 
     for e in standoff_entities:
@@ -275,17 +390,20 @@ def convert(text_file, model_predictions, tokens):
     with open(text_file, "r", encoding="utf-8") as textf:
 
         text = textf.read()
-        text = unicodedata.normalize("NFKD", text)
+        # text = unicodedata.normalize("NFKD", text)
 
     bio_str = ""
 
     for token_list, pred_list in zip(tokens, model_predictions):
         for token, pred in zip(token_list, pred_list):
+            # normalize each token
+            # bio_str += f"{unicodedata.normalize('NFKD', token)}\t{pred}\n"
             bio_str += f"{token}\t{pred}\n"
+
         bio_str += "\n"
 
-    # print(bio_str)
-    # print(text)
+    # print(f"bio str: {bio_str}")
+    # print(f"text: {text}")
     try:
         reconstructed_brat = BIO_to_standoff(
             BIOtext=bio_str, reftext=text, tokenidx=0, tagidx=1

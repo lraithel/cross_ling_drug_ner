@@ -88,11 +88,11 @@ class Attribute(object):
 class RecordTrack1(object):
     """Record for Track 1 class."""
 
-    def __init__(self, file_path):
+    def __init__(self, file_path, mode="pred"):
         """Initialize."""
         self.path = os.path.abspath(file_path)
         self.basename = os.path.basename(self.path)
-        self.annotations = self._get_annotations()
+        self.annotations = self._get_annotations(mode=mode)
         # self.text = self._get_text()
 
     @property
@@ -103,7 +103,7 @@ class RecordTrack1(object):
     def attributes(self):
         return self.annotations["attributes"]
 
-    def _get_annotations(self):
+    def _get_annotations(self, mode="pred"):
         """Return a dictionary with all the annotations in the .ann file."""
         annotations = defaultdict(dict)
         with open(self.path) as annotation_file:
@@ -128,6 +128,7 @@ class RecordTrack1(object):
                         tag_id, tag_m, tag_text = line.strip().split("\t")
                     except ValueError:
                         print(self.path, line)
+
                     if len(tag_m.split(" ")) == 3:
                         tag_type, tag_start, tag_end = tag_m.split(" ")
                     elif len(tag_m.split(" ")) == 4:
@@ -137,17 +138,38 @@ class RecordTrack1(object):
                     else:
                         print(self.path)
                         print(line)
+
+                    if mode == "gold" and tag_type not in [
+                        "NoDisposition",
+                        "Disposition",
+                        "Undetermined",
+                        "Substance",
+                        "Medication",
+                        "MEDICATION",
+                        "substance",
+                        "CHEM",
+                        "NORMALIZABLES",
+                        "NO_NORMALIZABLES",
+                        "Drug",
+                    ]:
+                        continue
+                    elif mode == "gold":
+                        tag_type = "Drug"
+
                     tag_start, tag_end = int(tag_start), int(tag_end)
-                    if tag_id in t_e_mapper:
-                        annotations["tags"][tag_id] = ClinicalConcept(
-                            t_e_mapper[tag_id],
-                            tag_start,
-                            tag_end,
-                            e_etype_mapper[t_e_mapper[tag_id]],
-                            tag_text,
-                        )
+                    # if tag_id in t_e_mapper:
+                    #     annotations["tags"][tag_id] = ClinicalConcept(
+                    #         t_e_mapper[tag_id],
+                    #         tag_start,
+                    #         tag_end,
+                    #         e_etype_mapper[t_e_mapper[tag_id]],
+                    #         tag_text,
+                    #     )
+                    # annotations["tags"]["D_" + tag_id] = ClinicalConcept(
+                    #     "D_" + tag_id, tag_start, tag_end, "Drug", tag_text
+                    # )
                     annotations["tags"]["D_" + tag_id] = ClinicalConcept(
-                        "D_" + tag_id, tag_start, tag_end, "Drug", tag_text
+                        "D_" + tag_id, tag_start, tag_end, tag_type, tag_text
                     )
 
             attribute_mapper = dict()
@@ -392,7 +414,14 @@ class MultipleEvaluator(object):
                 "micro": {"precision": 0, "recall": 0, "f1": 0},
             },
         }
-        self.tags = ("Drug", "Disposition", "NoDisposition", "Undetermined")
+        self.tags = (
+            "Drug",
+            "Disposition",
+            "NoDisposition",
+            "Undetermined",
+            "Substance",
+            "substance",
+        )
         self.attributes = (
             "Action",
             "Temporality",
@@ -448,9 +477,26 @@ class Corpora(object):
                 print(", ".join(sorted(list(files2 - common_files))))
         self.docs = []
         for file in common_files:
-            g = RecordTrack1(os.path.join(self.folder1, file))
-            s = RecordTrack1(os.path.join(self.folder2, file))
+            # print(file)
+            g = RecordTrack1(os.path.join(self.folder1, file), mode="gold")
+
+            # print("\nGOLD:")
+            # for k, v in g.annotations["tags"].items():
+            #     print(f"k: {k}\t{v.ttype}")
+
+            # print("\n\n")
+
+            # print("\nPRED:")
+
+            s = RecordTrack1(os.path.join(self.folder2, file), mode="pred")
+
+            # for k, v in s.annotations["tags"].items():
+            #     print(f"k: {k}\t{v.ttype}")
+
+            # print("\n\n")
+
             self.docs.append((g, s))
+            # break
 
 
 def evaluate(corpora, mode="strict", verbose=False):
