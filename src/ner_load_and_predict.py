@@ -221,11 +221,11 @@ def convert_documents_to_brat(
 if __name__ == "__main__":
 
     checkpoint_dirs = [
-        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/mono_de_models_with_preds/checkpoint_xlm-roberta-base_22_12_24_13_56",
-        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/mono_de_models_with_preds/checkpoint_xlm-roberta-base_22_12_24_16_10",
-        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/mono_de_models_with_preds/checkpoint_xlm-roberta-base_22_12_24_17_47",
-        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/mono_de_models_with_preds/checkpoint_xlm-roberta-base_22_12_24_19_12",
-        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/mono_de_models_with_preds/checkpoint_xlm-roberta-base_22_12_24_20_59",
+        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/mono_fr/checkpoint_xlm-roberta-base_22_12_24_12_39",
+        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/mono_fr/checkpoint_xlm-roberta-base_22_12_24_12_51",
+        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/mono_fr/checkpoint_xlm-roberta-base_22_12_24_13_07",
+        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/mono_fr/checkpoint_xlm-roberta-base_22_12_24_13_18",
+        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/mono_fr/checkpoint_xlm-roberta-base_22_12_24_13_32",
     ]
 
     for no, checkpoint_dir in enumerate(checkpoint_dirs):

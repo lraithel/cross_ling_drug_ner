@@ -727,7 +727,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="n2c2: Evaluation script for Track 1")
     parser.add_argument("folder1", help="First data folder path (gold)")
     parser.add_argument("folder2", help="Second data folder path (system)")
+    parser.add_argument("language", help="Choose one out of [all, de, en, fr, es]")
+
     args = parser.parse_args()
+
     df_strict, df_lenient = main(
         os.path.abspath(args.folder1),
         os.path.abspath(args.folder2),

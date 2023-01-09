@@ -8,8 +8,6 @@ from torch.optim import AdamW
 from torch.optim import RAdam
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
-from transformers import AutoModelForTokenClassification
-from transformers import AutoTokenizer
 from transformers import CanineForTokenClassification
 from transformers import CanineTokenizer
 from transformers import DataCollatorForTokenClassification
@@ -92,31 +90,18 @@ class DrugNER(object):
         if not model:
             model = self.config["model_name"]
 
-        if self.config["model_name"].startswith("google/canine"):
-            self.tokenizer = CanineTokenizer.from_pretrained("google/canine-c")
-        else:
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                model, use_fast=True, add_prefix_space=True, strip_accent=False
-            )
+        self.tokenizer = CanineTokenizer.from_pretrained(
+            model, use_fast=True, strip_accent=False
+        )
 
     def get_model(self, model=None):
         """Load a pre-trained model (fine-tuned or not)."""
         if model is None:
             model = self.config["model_name"]
 
-        if self.config["model_name"].startswith("google/canine"):
-            self.model = CanineForTokenClassification.from_pretrained(
-                self.config["model_name"]
-            )
-
-        else:
-            self.model = AutoModelForTokenClassification.from_pretrained(
-                model,
-                num_labels=len(self.label_list),
-                ignore_mismatched_sizes=True,
-                id2label=self.id2label,
-                label2id=self.label2id,
-            )
+        self.model = CanineForTokenClassification.from_pretrained(
+            self.config["model_name"]
+        )
 
     # def convert_to_unicode_id(self, documents):
     #     """Turn each character into its unicode code point id."""
@@ -132,92 +117,92 @@ class DrugNER(object):
 
         The data is already tokenized, but BERT needs subword tokens.
         """
-        chunked_tokens = documents["chunks_tokens"]
-        chunked_labels = documents["chunks_tags"]
+        chunked_tokens = documents["chunks_tokens"][:2]
+        chunked_labels = documents["chunks_tags"][:2]
 
-        # special treatment for character-based models
-        if self.config["model_name"].startswith("google/canine"):
-            tokenized_inputs = {
-                "input_ids": [],
-                "token_type_ids": [],
-                "attention_mask": [],
-            }
-            for chunk in chunked_tokens:
-                inputs = self.tokenizer(
-                    chunk, padding="longest", truncation=True, return_tensors="pt"
-                )
+        print(chunked_tokens)
+        print(chunked_labels)
 
-                assert (
-                    len(inputs["input_ids"])
-                    == len(inputs["token_type_ids"])
-                    == len(inputs["attention_mask"])
-                )
+        tokenized_inputs = self.tokenizer(
+            chunked_tokens,
+            padding="longest",
+            truncation=True,
+            return_tensors="pt",
+            is_split_into_words=True,
+        )
 
-                tokenized_inputs["input_ids"].append(inputs["input_ids"])
-                tokenized_inputs["token_type_ids"].append(inputs["token_type_ids"])
-                tokenized_inputs["attention_mask"].append(inputs["attention_mask"])
+        # # sub-tokenize input sentences and convert to IDs
+        # tokenized_inputs = self.tokenizer(
+        #     chunked_tokens,
+        #     is_split_into_words=True,
+        #     truncation=True,
+        #     max_length=510,
+        #     padding="max_length",
+        #     # add_prefix_space=True
+        # )
+        # # add the original tokens to the dataset
+        tokenized_inputs["chunks_tokens"] = chunked_tokens
 
-            return tokenized_inputs
+        # # we do no need this, only out of curiosity for what the sub word
+        # # tokens look like
+        # sub_tokens_all = []
+        # for idx_list in tokenized_inputs["input_ids"]:
+        #     sub_tokens = self.tokenizer.convert_ids_to_tokens(idx_list)
+        #     sub_tokens_all.append(sub_tokens)
 
-        # preparation for sub-token-based models
-        else:
+        # labels = []
+        print(tokenized_inputs)
 
-            # sub-tokenize input sentences and convert to IDs
-            tokenized_inputs = self.tokenizer(
-                chunked_tokens,
-                is_split_into_words=True,
-                truncation=True,
-                max_length=510,
-                padding="max_length",
-                # add_prefix_space=True
+        for i, chunked_label_list in enumerate(chunked_labels):
+            # word_ids = tokenized_inputs.word_ids(batch_index=i)
+            print(
+                len(chunked_tokens[i]),
+                len(chunked_label_list),
+                len([x for x in tokenized_inputs["input_ids"][i] if x != 0]),
             )
-            # add the original tokens to the dataset
-            tokenized_inputs["chunks_tokens"] = documents["chunks_tokens"]
 
-            # we do no need this, only out of curiosity for what the sub word
-            # tokens look like
-            sub_tokens_all = []
-            for idx_list in tokenized_inputs["input_ids"]:
-                sub_tokens = self.tokenizer.convert_ids_to_tokens(idx_list)
-                sub_tokens_all.append(sub_tokens)
+            assert (
+                len([x for x in tokenized_inputs["input_ids"][i] if x != 0])
+                == sum([len(token) for token in chunked_tokens[i]]) + 2
+            ), "#ids does not match"
+            # previous_word_idx = None
+            label_ids = []
+            characters = tokenized_inputs["input_ids"][i]
+            tokens = chunked_tokens[i]
+            for word_idx in chunked_label_list:
+                # Special tokens have a word id that is None. We set the
+                # label to -100 so they are automatically ignored in the
+                # loss function.
+                if word_idx == 57344:
+                    label_ids.append(-100)
+                # We set the label for the first token of each word.
+                elif word_idx != previous_word_idx:
+                    label_ids.append(self.label2id[chunked_label_list[word_idx]])
+                # For the other tokens in a word, we set the label to
+                # either the current label or -100, depending on the
+                # label_all_tokens flag.
+                else:
+                    label_ids.append(
+                        self.label2id[chunked_label_list[word_idx]]
+                        if label_all_tokens
+                        else -100
+                    )
+                previous_word_idx = word_idx
 
-            labels = []
+            labels.append(label_ids)
 
-            for i, chunked_label_list in enumerate(chunked_labels):
-                word_ids = tokenized_inputs.word_ids(batch_index=i)
+        # assert len(labels) == len(
+        #     sub_tokens_all
+        # ), "#labels and #sub tokens do not match"
 
-                previous_word_idx = None
-                label_ids = []
-                for word_idx in word_ids:
-                    # Special tokens have a word id that is None. We set the
-                    # label to -100 so they are automatically ignored in the
-                    # loss function.
-                    if word_idx is None:
-                        label_ids.append(-100)
-                    # We set the label for the first token of each word.
-                    elif word_idx != previous_word_idx:
-                        label_ids.append(self.label2id[chunked_label_list[word_idx]])
-                    # For the other tokens in a word, we set the label to
-                    # either the current label or -100, depending on the
-                    # label_all_tokens flag.
-                    else:
-                        label_ids.append(
-                            self.label2id[chunked_label_list[word_idx]]
-                            if label_all_tokens
-                            else -100
-                        )
-                    previous_word_idx = word_idx
+        tokenized_inputs["labels"] = labels
 
-                labels.append(label_ids)
+        print(len(tokenized_inputs["input_ids"][0]))
+        print(len(tokenized_inputs["labels"][0]))
 
-            assert len(labels) == len(
-                sub_tokens_all
-            ), "#labels and #sub tokens do not match"
-
-            tokenized_inputs["labels"] = labels
-            tokenized_inputs["sub_tokens"] = sub_tokens_all
-
-            return tokenized_inputs
+        # tokenized_inputs["sub_tokens"] = sub_tokens_all
+        assert False
+        return tokenized_inputs
 
     def compute_metrics(self, predictions, labels, languages):
         """Compute metrics for sequence labeling.
@@ -518,7 +503,7 @@ class DrugNER(object):
             unify_tags=self.config["unify_tags"],
             remove_all_except_drug=self.config["remove_all_except_drug"],
             # cache_dir="../.cache/huggingface/datasets",
-            download_mode="force_redownload",
+            # download_mode="force_redownload",
             cache_dir=self.config["cache_dir"],
         )
 
@@ -577,8 +562,8 @@ class DrugNER(object):
                     "input_ids",
                     "token_type_ids",
                     "attention_mask",
-                    "sub_tokens",
-                    "file_ids",
+                    # "sub_tokens",
+                    # "file_ids",
                 ]
             ]
         )
