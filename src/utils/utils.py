@@ -67,6 +67,59 @@ def calculate_number_of_found_tags(datasets):
     )
 
 
+def map_languages(documents):
+    """Map the language identifiers to IDs."""
+    languages = documents["language"]
+
+    mapped_langs = [lang2id[lang] for lang in languages]
+
+    return {"language": mapped_langs}
+
+
+def chunk_documents_into_windows(documents, window_size=500):
+    """..."""
+    file_names = documents["file_name"]
+    texts = documents["text"]
+    languages = documents["language"]
+    labels = documents["labels"]
+
+    chunked_texts = []
+    chunked_file_names = []
+    chunked_languages = []
+    chunked_labels = []
+
+    for file_name, text, language, label_list in zip(
+        file_names, texts, languages, labels
+    ):
+        text_chunks = [
+            text[i : i + window_size] for i in range(0, len(text), window_size)
+        ]
+        label_chunks = [
+            label_list[i : i + window_size]
+            for i in range(0, len(label_list), window_size)
+        ]
+        file_name_chunks = [
+            f"{file_name}{DELIMITER}{j}" for j in range(0, len(text_chunks))
+        ]
+        language_chunks = [language] * len(text_chunks)
+
+        assert len(text_chunks[0]) == len(
+            label_chunks[0]
+        ), f"lengths do not match: text_chunks: {len(text_chunks[0])} vs. label_chunks: {len(label_chunks[0])}"
+
+        chunked_texts.extend(text_chunks)
+        chunked_file_names.extend(file_name_chunks)
+        chunked_languages.extend(language_chunks)
+        chunked_labels.extend(label_chunks)
+
+    return {
+        "texts": chunked_texts,
+        "file_ids": chunked_file_names,
+        "labels": chunked_labels,
+        "languages": chunked_languages,
+    }
+
+
 def chunk_documents(documents, num_sentences=3, unify_tags=False):
     """Split each document in a sequence of `num_sentences` sentences."""
 

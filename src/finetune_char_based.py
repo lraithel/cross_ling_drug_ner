@@ -91,7 +91,11 @@ class DrugNER(object):
             model = self.config["model_name"]
 
         self.tokenizer = CanineTokenizer.from_pretrained(
-            model, use_fast=True, strip_accent=False
+            model,
+            use_fast=True,
+            strip_accent=False,
+            # bos_token="\ue000",
+            # eos_token="\ue001",
         )
 
     def get_model(self, model=None):
@@ -100,108 +104,80 @@ class DrugNER(object):
             model = self.config["model_name"]
 
         self.model = CanineForTokenClassification.from_pretrained(
-            self.config["model_name"]
+            self.config["model_name"],
+            id2label=self.id2label,
+            label2id=self.label2id,
         )
-
-    # def convert_to_unicode_id(self, documents):
-    #     """Turn each character into its unicode code point id."""
-
-    #     input_ids = torch.tensor([[ord(char) for char in text]])
-    #     tokenized_inputs["labels"] = labels
-    #     tokenized_inputs["sub_tokens"] = sub_tokens_all
-
-    #     return converted_inputs
 
     def tokenize_and_align_labels(self, documents, label_all_tokens=True):
         """Align the labels with the IDs.
 
-        The data is already tokenized, but BERT needs subword tokens.
+        In this case (using a char-based model), we only need to prepend and append
+        BOS and EOS markers, and add -100 for padding characters
         """
-        chunked_tokens = documents["chunks_tokens"][:2]
-        chunked_labels = documents["chunks_tags"][:2]
-
-        print(chunked_tokens)
-        print(chunked_labels)
+        # max_length = self.config["window_size"]
+        max_length = 2048
 
         tokenized_inputs = self.tokenizer(
-            chunked_tokens,
-            padding="longest",
+            documents["texts"],
             truncation=True,
+            # max_length=max_length,
+            padding="longest",
             return_tensors="pt",
-            is_split_into_words=True,
+            is_split_into_words=False,
         )
 
-        # # sub-tokenize input sentences and convert to IDs
-        # tokenized_inputs = self.tokenizer(
-        #     chunked_tokens,
-        #     is_split_into_words=True,
-        #     truncation=True,
-        #     max_length=510,
-        #     padding="max_length",
-        #     # add_prefix_space=True
-        # )
-        # # add the original tokens to the dataset
-        tokenized_inputs["chunks_tokens"] = chunked_tokens
+        tokenized_docs = tokenized_inputs["input_ids"]
+        labels = documents["labels"]
+        adapted_labels = []
 
-        # # we do no need this, only out of curiosity for what the sub word
-        # # tokens look like
-        # sub_tokens_all = []
-        # for idx_list in tokenized_inputs["input_ids"]:
-        #     sub_tokens = self.tokenizer.convert_ids_to_tokens(idx_list)
-        #     sub_tokens_all.append(sub_tokens)
+        for label_list, character_id_list in zip(labels, tokenized_docs):
+            # add -100 for the start of the document
+            adapted_labels_per_doc = [-100]
+            char_counter = 0
 
-        # labels = []
-        print(tokenized_inputs)
+            for lab, char_id in zip(label_list, character_id_list[1:]):
+                # 57344 is the start id
+                # We set the label for all characters of each token
+                if char_id == 57344:
+                    adapted_labels_per_doc.append(-100)
+                elif char_id == 0:
+                    adapted_labels_per_doc.append(-100)
+                else:
+                    adapted_labels_per_doc.append(self.label2id[lab])
 
-        for i, chunked_label_list in enumerate(chunked_labels):
-            # word_ids = tokenized_inputs.word_ids(batch_index=i)
-            print(
-                len(chunked_tokens[i]),
-                len(chunked_label_list),
-                len([x for x in tokenized_inputs["input_ids"][i] if x != 0]),
-            )
-
-            assert (
-                len([x for x in tokenized_inputs["input_ids"][i] if x != 0])
-                == sum([len(token) for token in chunked_tokens[i]]) + 2
-            ), "#ids does not match"
-            # previous_word_idx = None
-            label_ids = []
-            characters = tokenized_inputs["input_ids"][i]
-            tokens = chunked_tokens[i]
-            for word_idx in chunked_label_list:
-                # Special tokens have a word id that is None. We set the
-                # label to -100 so they are automatically ignored in the
-                # loss function.
-                if word_idx == 57344:
-                    label_ids.append(-100)
-                # We set the label for the first token of each word.
-                elif word_idx != previous_word_idx:
-                    label_ids.append(self.label2id[chunked_label_list[word_idx]])
                 # For the other tokens in a word, we set the label to
                 # either the current label or -100, depending on the
                 # label_all_tokens flag.
-                else:
-                    label_ids.append(
-                        self.label2id[chunked_label_list[word_idx]]
-                        if label_all_tokens
-                        else -100
-                    )
-                previous_word_idx = word_idx
+                # else:
+                char_counter += 1
+            # add an end-of-sentence marker for the labels
+            adapted_labels_per_doc.append(-100)
+            char_counter += 1
 
-            labels.append(label_ids)
+            # add as many -100 label IDs as possible, but cut off the
+            # sequence after 2048 elements (max sequence length)
+            adapted_labels_per_doc.extend(
+                [-100] * (len(character_id_list[char_counter + 1 :] + 1))
+            )
 
-        # assert len(labels) == len(
-        #     sub_tokens_all
-        # ), "#labels and #sub tokens do not match"
+            adapted_labels_per_doc = adapted_labels_per_doc[:max_length]
 
-        tokenized_inputs["labels"] = labels
+            adapted_labels.append(adapted_labels_per_doc)
 
-        print(len(tokenized_inputs["input_ids"][0]))
-        print(len(tokenized_inputs["labels"][0]))
+            assert len(adapted_labels_per_doc) == len(
+                character_id_list
+            ), f"lengths do not match: label: {len(adapted_labels_per_doc)} vs. characters: {len(character_id_list)}"
 
-        # tokenized_inputs["sub_tokens"] = sub_tokens_all
-        assert False
+        # for all_labels, all_texts in zip(adapted_labels, tokenized_docs):
+
+        #     for lab, char in zip(all_labels, all_texts):
+        #         print(char, lab)
+
+        #     print("\n")
+
+        tokenized_inputs["labels"] = adapted_labels
+
         return tokenized_inputs
 
     def compute_metrics(self, predictions, labels, languages):
@@ -227,44 +203,57 @@ class DrugNER(object):
         print("Computing metrics ... ")
 
         # Remove ignored index (special tokens)
+        # cleaned_predictions = [
+        #     [self.label_list[p] for (p, l) in zip(prediction, label) if l != -100]
+        #     for prediction, label in zip(predictions, labels)
+        # ]
+        print(f"predictions: {predictions[0]}, length: {len(predictions[0])}")
         cleaned_predictions = [
-            [self.label_list[p] for (p, l) in zip(prediction, label) if l != -100]
-            for prediction, label in zip(predictions, labels)
+            [self.model.config.id2label[t] for t in char_list if t != -100]
+            for char_list in predictions
         ]
-        true_labels = [
-            [self.label_list[l] for (p, l) in zip(prediction, label) if l != -100]
-            for prediction, label in zip(predictions, labels)
-        ]
-        sorted_by_language = utils.sort_by_language(
-            predictions=cleaned_predictions, labels=true_labels, languages=languages
+
+        print(
+            f"cleaned_predictions: {cleaned_predictions[0]}, length: {len(cleaned_predictions[0])}"
         )
-        for language, outputs in sorted_by_language.items():
 
-            results_trad_per_lang = self.trad_eval.compute(
-                predictions=outputs["predictions"],
-                references=outputs["true_labels"],
-                suffix=False,
-            )
+        true_labels = [
+            [self.label_list[l] for (p, l) in zip(prediction, label)]  # if l != -100]
+            for prediction, label in zip(predictions, labels)
+        ]
 
-            print(f"{id2lang[language]}: {results_trad_per_lang}")
+        print(f"true labels: {true_labels[0]}, length: {len(true_labels[0])}")
 
-            wandb.log({f"{id2lang[language]}_trad": results_trad_per_lang})
+        # sorted_by_language = utils.sort_by_language(
+        #     predictions=cleaned_predictions, labels=true_labels, languages=languages
+        # )
+        # for language, outputs in sorted_by_language.items():
 
-            try:
-                results_fair_per_lang = self.fair_eval.compute(
-                    predictions=outputs["predictions"],
-                    references=outputs["true_labels"],
-                    mode="fair",
-                    error_format="count",
-                )
+        #     results_trad_per_lang = self.trad_eval.compute(
+        #         predictions=outputs["predictions"],
+        #         references=outputs["true_labels"],
+        #         suffix=False,
+        #     )
 
-                wandb.log({f"{id2lang[language]}_fair": results_fair_per_lang})
+        #     print(f"{id2lang[language]}: {results_trad_per_lang}")
 
-            except ValueError:
-                print(
-                    f"Warning: could not get results for language '{id2lang[language]}'"
-                )
-                pass
+        #     wandb.log({f"{id2lang[language]}_trad": results_trad_per_lang})
+
+        #     try:
+        #         results_fair_per_lang = self.fair_eval.compute(
+        #             predictions=outputs["predictions"],
+        #             references=outputs["true_labels"],
+        #             mode="fair",
+        #             error_format="count",
+        #         )
+
+        #         wandb.log({f"{id2lang[language]}_fair": results_fair_per_lang})
+
+        #     except ValueError:
+        #         print(
+        #             f"Warning: could not get results for language '{id2lang[language]}'"
+        #         )
+        #         pass
 
         cls_report_dict = classification_report(
             y_true=true_labels, y_pred=cleaned_predictions, output_dict=True
@@ -439,13 +428,22 @@ class DrugNER(object):
                 wandb.log({"eval/loss": eval_loss})
 
                 logits = outputs.logits
-                predictions = (
+
+                predicted_char_class_ids = (
                     torch.argmax(logits, dim=-1).detach().cpu().numpy().tolist()
                 )
-                true_labels = batch["labels"].detach().cpu().numpy().tolist()
-                languages = batch["language"].detach().cpu().numpy().tolist()
+                # print(f"predicted char class ids: {predicted_char_class_ids}")
 
-                eval_predictions.extend(predictions)
+                # Note that tokens are classified rather then input words which means that
+                # there might be more predicted token classes than words.
+                # Multiple token classes might account for the same word
+
+                true_labels = batch["labels"].detach().cpu().numpy().tolist()
+                languages = batch["languages"].detach().cpu().numpy().tolist()
+
+                # eval_predictions.extend(predictions)
+                eval_predictions.extend(predicted_char_class_ids)
+
                 eval_true_labels.extend(true_labels)
                 eval_languages.extend(languages)
 
@@ -490,7 +488,7 @@ class DrugNER(object):
 
     def prepare_data(self, model=False, download_mode="force_redownload"):
         """..."""
-        path_to_loader = "src/brat_dataset.py"
+        path_to_loader = "src/brat_dataset_character_based.py"
 
         datasets = load_dataset(
             path_to_loader,
@@ -503,7 +501,7 @@ class DrugNER(object):
             unify_tags=self.config["unify_tags"],
             remove_all_except_drug=self.config["remove_all_except_drug"],
             # cache_dir="../.cache/huggingface/datasets",
-            # download_mode="force_redownload",
+            download_mode="force_redownload",
             cache_dir=self.config["cache_dir"],
         )
 
@@ -511,45 +509,48 @@ class DrugNER(object):
 
         # dataset = load_dataset('dfki-nlp/brat', **kwargs)
 
-        if self.config["unify_tags"]:
-            self.label_list = datasets["train"].features["ner_tags"].feature.names
-        else:
-            self.label_list = datasets["train"].features["token_labels"].feature.names
+        self.label_list = ["O", "B-Drug", "I-Drug"]
 
         self.label2id = {l: i for i, l in enumerate(self.label_list)}
         self.id2label = {i: l for i, l in enumerate(self.label_list)}
 
-        print(datasets)
+        # print(datasets)
 
-        # split the documents in chunks of x sentences (results in lists of lists of tokens)
+        print(self.label2id)
+
         datasets = datasets.map(
-            utils.chunk_documents,
+            utils.map_languages, batched=True, remove_columns=["language"]
+        )
+        # split the documents in chunks
+        datasets = datasets.map(
+            utils.chunk_documents_into_windows,
             fn_kwargs={
-                "num_sentences": self.config["num_sentences"],
-                "unify_tags": self.config["unify_tags"],
+                "window_size": self.config["window_size"],
             },
             batched=True,
             remove_columns=datasets["train"].column_names,
         )
-        # print(f"chunk tokens: {datasets['test']['chunks_tokens']}\n")
+        # print(datasets["train"]["texts"])
+        # print(datasets["train"]["labels"])
 
-        # combine the lists of lists of tokens to lists of tokens (should be done in mapping above)
-        self.datasets = datasets.map(
-            utils.combine_x_sentences,
-            batched=True,
-            # those two columns are not really removed but replaced by the
-            # same column names
-            remove_columns=["chunks_tokens", "chunks_tags"],
-        )
+        # # combine the lists of lists of tokens to lists of tokens (should be done in mapping above)
+        # self.datasets = datasets.map(
+        #     utils.combine_x_sentences,
+        #     batched=True,
+        #     # those two columns are not really removed but replaced by the
+        #     # same column names
+        #     remove_columns=["chunks_tokens", "chunks_tags"],
+        # )
 
         self.get_tokenizer(model=model)
 
-        self.tokenized_datasets = self.datasets.map(
+        self.tokenized_datasets = datasets.map(
             self.tokenize_and_align_labels,
             batched=True,
             fn_kwargs={"label_all_tokens": True},
         )
 
+        print(self.tokenized_datasets["train"][3])
         # remove features that are not necessary for training
         self.tokenized_datasets = self.tokenized_datasets.remove_columns(
             [
@@ -558,7 +559,7 @@ class DrugNER(object):
                 if col
                 not in [
                     "labels",
-                    "language",
+                    "languages",
                     "input_ids",
                     "token_type_ids",
                     "attention_mask",
