@@ -120,6 +120,54 @@ def chunk_documents_into_windows(documents, window_size=500):
     }
 
 
+def re_combine_windows(dataset, predictions):
+    """Recombine the predictions on the chunked documents."""
+    characters_per_chunk = dataset["texts"]
+
+    file_ids_per_chunk = dataset["file_ids"]
+    chars_per_file = []
+    tags_per_file = []
+    txt_file_ids = []
+    all_files = []
+    all_tags = []
+    previous_file_name = ""
+
+    for char_chunk, pred_chunk, file_id in zip(
+        characters_per_chunk, predictions, file_ids_per_chunk
+    ):
+        # print(file_id)
+        file_name = file_id.split(DELIMITER)[0]
+
+        if file_name != previous_file_name and previous_file_name != "":
+            # print(
+            #     f"chars_per_file:\n{chars_per_file}\n\ntags per file:\n{tags_per_file}\n\n######################\n"
+            # )
+            all_files.append("".join(chars_per_file))
+            all_tags.append(tags_per_file)
+            txt_file_ids.append(previous_file_name)
+            # empty the lists and add the newly collected
+            chars_per_file = [char_chunk]
+            tags_per_file = pred_chunk
+
+        else:
+            chars_per_file.extend(char_chunk)
+            tags_per_file.extend(pred_chunk)
+
+        previous_file_name = file_name
+
+    # print(all_tags, all_files, txt_file_ids)
+
+    all_files.append("".join(chars_per_file))
+    all_tags.append(tags_per_file)
+    txt_file_ids.append(previous_file_name)
+
+    assert len(all_tags) == len(
+        all_files
+    ), f"#text and #predictions does not match: texts: {len(all_files)} vs. predictions: {len(all_tags)}"
+    # return a list of results per document
+    return all_tags, all_files, txt_file_ids
+
+
 def chunk_documents(documents, num_sentences=3, unify_tags=False):
     """Split each document in a sequence of `num_sentences` sentences."""
 

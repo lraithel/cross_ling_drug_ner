@@ -357,25 +357,11 @@ class Brat(datasets.GeneratorBasedBuilder):
             files_without_ext = sorted([path.splitext(fn)[0] for fn in files])
             # files = sorted([path.splitext(fn) for fn in _files])
 
-        for file_name in files_without_ext[:4]:
+        for file_name in files_without_ext:
+            mismatch_counter = 0
             annotations = {}
             ann_fn = f"{file_name}.{self.config.ann_file_extension}"
             brat_annotations = Brat._read_annotation_file(ann_fn)
-
-            selection = []
-            for span in brat_annotations["spans"]:
-                if span["type"] in TAG_LIST:
-                    if len(span["locations"]) > 1:
-                        assert False, "more than one location"
-                    selection.append(
-                        {
-                            "id": span["id"],
-                            "text": span["text"],
-                            "type": "Drug",
-                            "start": span["locations"][0]["start"],
-                            "end": span["locations"][0]["end"],
-                        }
-                    )
             # get the corresponding txt file
             txt_fn = f"{file_name}.{self.config.txt_file_extension}"
 
@@ -384,22 +370,80 @@ class Brat(datasets.GeneratorBasedBuilder):
 
                 annotations["text"] = txt_content
 
+            selection = []
+            for span in brat_annotations["spans"]:
+                if span["type"] in TAG_LIST:
+                    if len(span["locations"]) > 1:
+                        sorted_locations = sorted(
+                            span["locations"], key=lambda d: d["start"]
+                        )
+                        span = {
+                            "id": span["id"],
+                            "text": span["text"],
+                            "type": span["type"],
+                            "locations": [
+                                {
+                                    "start": sorted_locations[0]["start"],
+                                    "end": sorted_locations[-1]["end"],
+                                }
+                            ],
+                        }
+
+                    if (
+                        span["text"]
+                        == txt_content[
+                            span["locations"][0]["start"] : span["locations"][0]["end"]
+                        ]
+                    ):
+                        selection.append(
+                            {
+                                "id": span["id"],
+                                "text": span["text"],
+                                "type": "Drug",
+                                "start": span["locations"][0]["start"],
+                                "end": span["locations"][0]["end"],
+                            }
+                        )
+                    else:
+                        mismatch_counter += 1
+
+            if mismatch_counter > 0:
+                print(
+                    f"WARNING: Found {mismatch_counter} span mismatches in file {txt_fn}\n"
+                )
+
             labels = ["O"] * len(txt_content)
             spans_sorted = sorted(selection, key=lambda d: d["start"])
 
             annotations["spans"] = spans_sorted
 
+            # print(txt_content)
+
+            # print(spans_sorted)
+
+            # print(f"len labels: {len(labels)}\nlen text: {len(txt_content)}\n")
             for span in spans_sorted:
 
                 start = span["start"]
                 end = span["end"]
+                # print(f"start: {start}, end: {end}, len labels: {len(labels)}")
                 labels[start] = "B-Drug"
-                x = start + 1
+                start += 1
+                while start < end:
+                    try:
+                        # print(f"start: {start}")
+                        labels[start] = "I-Drug"
+                        start += 1
+                    except IndexError:
+                        break
+            # print(f"final labels: {labels}")
 
-                while x <= end:
-                    labels[x] = "I-Drug"
-                    x += 1
+            # print(f"#####################\nANNOTATIONS:\n")
 
+            # for label, char in zip(labels, txt_content):
+            #     print(f"'{char}', {label})
+
+            # print("\n############################\n")
             annotations["labels"] = labels
 
             # the language is encoded at the very beginning of the files,

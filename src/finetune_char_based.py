@@ -203,57 +203,52 @@ class DrugNER(object):
         print("Computing metrics ... ")
 
         # Remove ignored index (special tokens)
-        # cleaned_predictions = [
-        #     [self.label_list[p] for (p, l) in zip(prediction, label) if l != -100]
-        #     for prediction, label in zip(predictions, labels)
-        # ]
-        print(f"predictions: {predictions[0]}, length: {len(predictions[0])}")
         cleaned_predictions = [
-            [self.model.config.id2label[t] for t in char_list if t != -100]
-            for char_list in predictions
-        ]
-
-        print(
-            f"cleaned_predictions: {cleaned_predictions[0]}, length: {len(cleaned_predictions[0])}"
-        )
-
-        true_labels = [
-            [self.label_list[l] for (p, l) in zip(prediction, label)]  # if l != -100]
+            [self.label_list[p] for (p, l) in zip(prediction, label) if l != -100]
             for prediction, label in zip(predictions, labels)
         ]
 
-        print(f"true labels: {true_labels[0]}, length: {len(true_labels[0])}")
-
-        # sorted_by_language = utils.sort_by_language(
-        #     predictions=cleaned_predictions, labels=true_labels, languages=languages
+        # print(
+        #     f"cleaned_predictions: {cleaned_predictions}, length: {len(cleaned_predictions)}"
         # )
-        # for language, outputs in sorted_by_language.items():
 
-        #     results_trad_per_lang = self.trad_eval.compute(
-        #         predictions=outputs["predictions"],
-        #         references=outputs["true_labels"],
-        #         suffix=False,
-        #     )
+        true_labels = [
+            [self.label_list[l] for (p, l) in zip(prediction, label) if l != -100]
+            for prediction, label in zip(predictions, labels)
+        ]
 
-        #     print(f"{id2lang[language]}: {results_trad_per_lang}")
+        # print(f"true labels: {true_labels}, length: {len(true_labels)}")
 
-        #     wandb.log({f"{id2lang[language]}_trad": results_trad_per_lang})
+        sorted_by_language = utils.sort_by_language(
+            predictions=cleaned_predictions, labels=true_labels, languages=languages
+        )
+        for language, outputs in sorted_by_language.items():
 
-        #     try:
-        #         results_fair_per_lang = self.fair_eval.compute(
-        #             predictions=outputs["predictions"],
-        #             references=outputs["true_labels"],
-        #             mode="fair",
-        #             error_format="count",
-        #         )
+            results_trad_per_lang = self.trad_eval.compute(
+                predictions=outputs["predictions"],
+                references=outputs["true_labels"],
+                suffix=False,
+            )
 
-        #         wandb.log({f"{id2lang[language]}_fair": results_fair_per_lang})
+            print(f"{id2lang[language]}: {results_trad_per_lang}")
 
-        #     except ValueError:
-        #         print(
-        #             f"Warning: could not get results for language '{id2lang[language]}'"
-        #         )
-        #         pass
+            wandb.log({f"{id2lang[language]}_trad": results_trad_per_lang})
+
+            try:
+                results_fair_per_lang = self.fair_eval.compute(
+                    predictions=outputs["predictions"],
+                    references=outputs["true_labels"],
+                    mode="fair",
+                    error_format="count",
+                )
+
+                wandb.log({f"{id2lang[language]}_fair": results_fair_per_lang})
+
+            except ValueError:
+                print(
+                    f"Warning: could not get results for language '{id2lang[language]}'"
+                )
+                pass
 
         cls_report_dict = classification_report(
             y_true=true_labels, y_pred=cleaned_predictions, output_dict=True
@@ -501,7 +496,7 @@ class DrugNER(object):
             unify_tags=self.config["unify_tags"],
             remove_all_except_drug=self.config["remove_all_except_drug"],
             # cache_dir="../.cache/huggingface/datasets",
-            download_mode="force_redownload",
+            # download_mode="force_redownload",
             cache_dir=self.config["cache_dir"],
         )
 
@@ -550,7 +545,6 @@ class DrugNER(object):
             fn_kwargs={"label_all_tokens": True},
         )
 
-        print(self.tokenized_datasets["train"][3])
         # remove features that are not necessary for training
         self.tokenized_datasets = self.tokenized_datasets.remove_columns(
             [
@@ -563,7 +557,7 @@ class DrugNER(object):
                     "input_ids",
                     "token_type_ids",
                     "attention_mask",
-                    # "sub_tokens",
+                    # "texts",
                     # "file_ids",
                 ]
             ]
