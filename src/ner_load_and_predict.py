@@ -246,13 +246,42 @@ if __name__ == "__main__":
         # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_17_47",
         # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_19_12",
         # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_20_59",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_17_46",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_17_50",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_19_13",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_19_15",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_23_14_40",
-
-    ]
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_17_46",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_17_50",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_19_13",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_19_15",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_23_14_40",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_32",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_18",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_07",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_51",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_39"
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/de_en/checkpoint_xlm-roberta-base_22_12_26_17_54",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/de_en/checkpoint_xlm-roberta-base_22_12_26_17_19",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/de_en/checkpoint_xlm-roberta-base_22_12_26_16_28",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/de_en/checkpoint_xlm-roberta-base_22_12_26_15_42",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/de_en/checkpoint_xlm-roberta-base_22_12_26_21_10"
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/es_fr/checkpoint_xlm-roberta-base_22_12_26_14_31",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/es_fr/checkpoint_xlm-roberta-base_22_12_26_17_34",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/es_fr/checkpoint_xlm-roberta-base_22_12_26_13_47",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/es_fr/checkpoint_xlm-roberta-base_22_12_26_13_06",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/es_fr/checkpoint_xlm-roberta-base_22_12_26_12_59"
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_32",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_18",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_07",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_51",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_39"
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_42",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_24",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_10",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_15_52",
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_15_33"
+        "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/es/checkpoint_xlm-roberta-base_22_12_24_16_41",
+        "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/es/checkpoint_xlm-roberta-base_22_12_24_16_23",
+        "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/es/checkpoint_xlm-roberta-base_22_12_24_16_11",
+        "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/es/checkpoint_xlm-roberta-base_22_12_24_15_48",
+        "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/es/checkpoint_xlm-roberta-base_22_12_24_15_31"
+ ]
 
     for no, checkpoint_dir in enumerate(checkpoint_dirs):
 
