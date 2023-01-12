@@ -518,7 +518,7 @@ class DrugNER(object):
             unify_tags=self.config["unify_tags"],
             remove_all_except_drug=self.config["remove_all_except_drug"],
             # cache_dir="../.cache/huggingface/datasets",
-            download_mode="force_redownload",
+            # download_mode="force_redownload",
             cache_dir=self.config["cache_dir"],
         )
 

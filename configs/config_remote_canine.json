@@ -12,5 +12,5 @@
   "unify_tags": true,
   "use_wandb": true,
   "save_best_model": true,
-  "cache_dir": "/netscratch/raithel/projects/cross_ling_drug_ner/"
+  "cache_dir": "/netscratch/raithel/projects/cross_ling_drug_ner/hf_cache/"
 }
