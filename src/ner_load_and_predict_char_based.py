@@ -150,6 +150,7 @@ def post_process_span(start, end, text, counter):
     """Post-process the selected spans to remove white space etc."""
     span = text[start:end]
     entity_counter = 1
+    brat_anno = ""
 
     if start == end:
         return "", 0
@@ -157,14 +158,10 @@ def post_process_span(start, end, text, counter):
     if len(span) <= 1:
         return "", 0
 
-    # print(f"span: '{span}', start: {start}, end: {end}")
-
     if span != span.strip():
-        # print("found whitespace")
-        # split the span by whitespace
-        # parts = span.split(" ")
+
         parts = re.split(r"(\W)", span)
-        # print(f"parts: {parts}")
+
         for part in parts:
             if part in ("\n", "", "\t", " "):
                 start += 1
@@ -177,35 +174,24 @@ def post_process_span(start, end, text, counter):
             if part != "":
                 break
 
-        span = text[start:end]
-        # print(f"new span: '{span}', start: {start}, end: {end}\n")
+        if start != end:
+            span = text[start:end]
 
-        brat_anno = f"T{counter}\tDrug {start} {end}\t{span}\n"
+            brat_anno = f"T{counter}\tDrug {start} {end}\t{span}\n"
 
     elif "\n" in span:
-        brat_anno = ""
         original = span
-        # print("found new line")
         ent_list = re.split(r"(\W)", span)
 
-        # print(f"ent list: {ent_list}")
         # go over the single entities
         for i, e in enumerate(ent_list):
             current_start = start
-            current_end = start + len(e)
-            # print(
-            #     f"current_start: {current_start}, current end: {current_end}, e: {e}, span: {text[current_start:current_end]}"
-            # )
+            current_end = current_start + len(e)
             if e not in ("\n", "", "\t", " "):
-                if len(e) >= 2:
-
+                if len(e) >= 2 and current_start != current_end:
                     span = text[current_start:current_end]
                     brat_anno += f"T{counter + entity_counter}\tDrug {current_start} {current_end}\t{span}\n"
                     entity_counter += 1
-                    # if entity_counter > 1:
-                    #     print(f"brat anno:\n{brat_anno}")
-
-                    #     assert False, f"found new line: {original}"
 
             start = current_end
 
@@ -236,30 +222,61 @@ def convert_documents_to_brat(
 
         for i, (pred, char) in enumerate(zip(prediction, text)):
 
-            # print(f"i: {i}, pred: {pred}, char: {char} --> prev pred: {previous_pred}")
-
             # usually, a relevant prediction starts with B
             if pred == "B-Drug":
                 start = i
 
             # if we encounter an I that was preceded by an I, we are in the middle of a span
-            elif pred == "I-Drug" and previous_pred == "I-Drug":
-                pass
-            # sometimes, however, it starts with I (make sure that there was no B beforehand)
-            elif pred == "I-Drug" and previous_pred != "B-Drug":
+            elif pred == "I-Drug" and previous_pred in ("I-Drug", "B-Drug"):
+                # if we arrive at the very last character
+                if i == len(prediction) - 1:
+                    end = i
+                    if start == end and start != 0:
+                        assert (
+                            False
+                        ), f"i: {i}, pred: {pred}, char: {char} --> prev pred: {previous_pred}"
+
+                    # if the start ID is the same as the end ID, we ignore this span
+                    if start == end or end < start:
+                        previous_pred = pred
+                        continue
+                    # post-process potential spans
+                    anno, added_spans = post_process_span(
+                        start=start, end=end, text=text, counter=anno_counter
+                    )
+                    if anno != "":
+                        brat_anno += anno
+                        anno_counter += added_spans
+                else:
+                    pass
+            # sometimes, however, a relevant entity starts with I
+            # (make sure that there was no other annotation beforehand)
+            elif pred == "I-Drug" and previous_pred in ("O", ""):
                 start = i
 
             elif pred == "I-Drug" and previous_pred == "B-Drug":
                 pass
 
+            # we only add a brat string if we reach another O entity
             elif pred == "O" and previous_pred in ("B-Drug", "I-Drug"):
                 end = i
+                if start == end and start != 0:
+                    assert (
+                        False
+                    ), f"i: {i}, pred: {pred}, char: {char} --> prev pred: {previous_pred}"
+
+                # if the start ID is the same as the end ID, we ignore this span
+                if start == end or end < start:
+                    previous_pred = pred
+                    continue
+                # post-process potential spans
                 anno, added_spans = post_process_span(
                     start=start, end=end, text=text, counter=anno_counter
                 )
                 if anno != "":
                     brat_anno += anno
                     anno_counter += added_spans
+
             # the first iteration: we do not have a previous pred
             elif pred == "O" and previous_pred in ("", "O"):
                 pass
@@ -270,6 +287,14 @@ def convert_documents_to_brat(
 
             previous_pred = pred
 
+        if start != end and end == len(text) - 1:
+            anno, added_spans = post_process_span(
+                start=start, end=end, text=text, counter=anno_counter
+            )
+            if anno != "":
+                brat_anno += anno
+                anno_counter += added_spans
+
         path = os.path.join(output_dir, f"{file_name}.ann")
 
         with open(path, "w") as write_handle:
@@ -277,33 +302,6 @@ def convert_documents_to_brat(
                 write_handle.write(brat_anno)
             else:
                 pass
-    # for prediction, tokens, txt_file in zip(predictions, tokens, txt_files):
-
-    #     assert len(tokens) == len(prediction)
-
-    #     print(f"Current text file: {txt_file}")
-    #     # path_to_text = os.path.join(data_url, "dev", txt_file + ".txt")
-    #     path_to_text = os.path.join(data_url, test_data_identifier, txt_file + ".txt")
-
-    #     # returns a list of annotation strings
-    #     brat_anno, bio_str = convert(
-    #         text_file=path_to_text, model_predictions=prediction, tokens=tokens
-    #     )
-
-    #     file_name = os.path.basename(txt_file).split(".txt")[0]
-    #     write_conll(
-    #         output_dir=output_dir, conll_str=bio_str, file_name=f"{file_name}.conll"
-    #     )
-
-    #     path = os.path.join(output_dir, f"{file_name}.ann")
-
-    #     # create one file for every document
-    #     with open(path, "w") as write_handle:
-    #         for line in brat_anno:
-    #             # line = unicodedata.normalize("NFKD", str(line))
-
-    #             write_handle.write(str(line))
-    #             write_handle.write("\n")
 
 
 if __name__ == "__main__":

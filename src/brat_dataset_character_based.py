@@ -46,6 +46,8 @@ TAG_LIST = [
     "substance",
     "CHEM",
     "Drug",
+    "NORMALIZABLES",
+    "NO_NORMALIZABLES",
 ]
 
 
@@ -76,31 +78,9 @@ class Brat(datasets.GeneratorBasedBuilder):
             homepage=self.config.homepage,
             features=Features(
                 {
-                    # "context": Value("string"),
                     "text": Value("string"),
-                    # "tokens": Sequence(Value("string")),
                     "language": Value("string"),
                     "labels": Sequence(Value("string")),
-                    # if we unify all relevant tags to "Drug", we only
-                    # need those below
-                    # "ner_tags": datasets.Sequence(
-                    #     datasets.features.ClassLabel(
-                    #         names=[
-                    #             "O",
-                    #             "B-Drug",
-                    #             "I-Drug",
-                    #         ]
-                    #     )
-                    # ),
-                    # # this is the list of all available token labels
-                    # "token_labels": datasets.Sequence(
-                    #     datasets.features.ClassLabel(
-                    #         names_file="src/utils/entities.txt"
-                    #     )
-                    # ),
-                    # "tokens_per_sentence": Sequence(Sequence(Value("string"))),
-                    # "tags_per_sentence": Sequence(Sequence(Value("string"))),
-                    # "token_labels_per_sentence": Sequence(Sequence(Value("string"))),
                     "file_name": Value("string"),
                     "spans": Sequence(
                         {
@@ -111,56 +91,6 @@ class Brat(datasets.GeneratorBasedBuilder):
                             "text": Value("string"),
                         }
                     ),
-                    # "relations": Sequence(
-                    #     {
-                    #         "id": Value("string"),
-                    #         "type": Value("string"),
-                    #         "arguments": Sequence(
-                    #             {"type": Value("string"), "target": Value("string")}
-                    #         ),
-                    #     }
-                    # ),
-                    # "equivalence_relations": Sequence(
-                    #     {
-                    #         "type": Value("string"),
-                    #         "targets": Sequence(Value("string")),
-                    #     }
-                    # ),
-                    # "events": Sequence(
-                    #     {
-                    #         "id": Value("string"),
-                    #         "type": Value("string"),
-                    #         "trigger": Value("string"),
-                    #         "arguments": Sequence(
-                    #             {"type": Value("string"), "target": Value("string")}
-                    #         ),
-                    #     }
-                    # ),
-                    # "attributions": Sequence(
-                    #     {
-                    #         "id": Value("string"),
-                    #         "type": Value("string"),
-                    #         "target": Value("string"),
-                    #         "value": Value("string"),
-                    #     }
-                    # ),
-                    # "normalizations": Sequence(
-                    #     {
-                    #         "id": Value("string"),
-                    #         "type": Value("string"),
-                    #         "target": Value("string"),
-                    #         "resource_id": Value("string"),
-                    #         "entity_id": Value("string"),
-                    #     }
-                    # ),
-                    # "notes": Sequence(
-                    #     {
-                    #         "id": Value("string"),
-                    #         "type": Value("string"),
-                    #         "target": Value("string"),
-                    #         "note": Value("string"),
-                    #     }
-                    # ),
                 }
             ),
         )
