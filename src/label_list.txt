@@ -1,0 +1,9 @@
+NoDisposition
+Disposition
+Undetermined
+Substance
+Medication
+MEDICATION
+substance
+CHEM
+Drug

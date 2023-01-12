@@ -454,16 +454,38 @@ class MultipleEvaluator(object):
 
 
 class Corpora(object):
-    def __init__(self, folder1, folder2):
+    def __init__(self, folder1, folder2, language="all"):
         file_ext = "*.ann"
         self.folder1 = folder1
         self.folder2 = folder2
-        files1 = set(
-            [os.path.basename(f) for f in glob.glob(os.path.join(folder1, file_ext))]
-        )
-        files2 = set(
-            [os.path.basename(f) for f in glob.glob(os.path.join(folder2, file_ext))]
-        )
+        if language == "all":
+            files1 = set(
+                [
+                    os.path.basename(f)
+                    for f in glob.glob(os.path.join(folder1, file_ext))
+                ]
+            )
+            files2 = set(
+                [
+                    os.path.basename(f)
+                    for f in glob.glob(os.path.join(folder2, file_ext))
+                ]
+            )
+        else:
+            files1 = set(
+                [
+                    os.path.basename(f)
+                    for f in glob.glob(os.path.join(folder1, file_ext))
+                    if os.path.basename(f).startswith(language)
+                ]
+            )
+            files2 = set(
+                [
+                    os.path.basename(f)
+                    for f in glob.glob(os.path.join(folder2, file_ext))
+                    if os.path.basename(f).startswith(language)
+                ]
+            )
 
         common_files = files1 & files2  # intersection
         if not common_files:
@@ -685,8 +707,8 @@ def evaluate(corpora, mode="strict", verbose=False):
     print("{:20}{:^48}".format("", "  {} files evaluated  ".format(len(corpora.docs))))
 
 
-def main(f1, f2, verbose):
-    corpora = Corpora(f1, f2)
+def main(f1, f2, verbose, language="all"):
+    corpora = Corpora(f1, f2, language=language)
     if corpora.docs:
         evaluate(corpora, verbose=verbose)
 
@@ -695,5 +717,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="n2c2: Evaluation script for Track 1")
     parser.add_argument("folder1", help="First data folder path (gold)")
     parser.add_argument("folder2", help="Second data folder path (system)")
+    parser.add_argument(
+        "language", type=str, help="Choose one out of [all, de, en, fr, es]"
+    )
     args = parser.parse_args()
-    main(os.path.abspath(args.folder1), os.path.abspath(args.folder2), False)
+    main(
+        f1=os.path.abspath(args.folder1),
+        f2=os.path.abspath(args.folder2),
+        verbose=False,
+        language=args.language,
+    )

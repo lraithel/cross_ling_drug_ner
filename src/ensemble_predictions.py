@@ -1,84 +1,150 @@
 import argparse
+import evaluate
 import json
 import os
-
-from bio2brat import convert
-from finetune_ner import DrugNER
-from utils import utils
-
 import re
 
+import pandas as pd
+
+from bio2brat import convert
+from fine_tune_ner_2 import DrugNER
+from ner_load_and_predict import write_conll
+from utils import utils
+
 from collections import Counter
+from seqeval.metrics import classification_report
+
+with open("src/utils/lang_dict.json", "r") as read_handle:
+    lang2id = json.load(read_handle)
+    id2lang = {value: key for key, value in lang2id.items()}
 
 
-def get_string_matches(annos, path_to_text, drugs, drug_length=3):
-    """Add simple string matches based on a list of drugs."""
-    tups = set()
-    for line in annos:
-        parts = str(line).split("\t")
-        d = parts[-1]
-        rem = parts[1].split()
-        tups.add((d, rem[1], rem[2]))
+def calculate_scores(true_labels, merged_predictions, languages, reports_file):
+    """Calculate the scores once again, using the merged predictions."""
 
-    with open(path_to_text, "r") as read_handle:
-        text = read_handle.read()
+    reports = {}
 
-    matches = []
-    # longest drug is 96 characters
-    for drug in drugs:
+    # load the traditional and "fair" eval metrics
+    trad_eval = evaluate.load("seqeval")
+    fair_eval = evaluate.load("hpi-dhc/FairEval", suffix=False, scheme="IOB2")
 
-        if len(drug) > drug_length:
-            matches.extend(
-                [
-                    (
-                        text[match.start() : match.end()],
-                        str(match.start()),
-                        str(match.end()),
-                    )
-                    for match in re.finditer(re.escape(drug.lower()), text.lower())
-                ]
+    cls_report = classification_report(
+        y_true=true_labels, y_pred=merged_predictions, output_dict=True
+    )
+    reports["classification_report"] = cls_report
+
+    sorted_by_language = utils.sort_by_language(
+        predictions=merged_predictions, labels=true_labels, languages=languages
+    )
+
+    for language, outputs in sorted_by_language.items():
+
+        results_trad_per_lang = trad_eval.compute(
+            predictions=outputs["predictions"],
+            references=outputs["true_labels"],
+            suffix=False,
+        )
+
+        reports[f"{id2lang[language]}_traditional"] = results_trad_per_lang
+
+        try:
+            results_fair_per_lang = fair_eval.compute(
+                predictions=outputs["predictions"],
+                references=outputs["true_labels"],
+                mode="fair",
+                error_format="count",
             )
 
-    # print(f"tups: {tups}\n")
-    # if set(matches) - tups:
-    #     print(f"added: {set(matches) - tups}")
-    tups.update(set(matches))
-    # print(f"merged: {tups}\n-----------------------------------------\n")
+            reports[f"{id2lang[language]}_fair"] = results_fair_per_lang
 
-    new_annos = []
-    for i, tup in enumerate(tups):
-        new_annos.append(f"T{i+1}\tDrug {tup[1]} {tup[2]}\t{tup[0]}")
+        except ValueError:
+            print(f"Warning: could not get results for language '{id2lang[language]}'")
+            pass
 
-    return new_annos
+    for key, results_dict in reports.items():
+        print(f"\n{key}")
+        try:
+            df = pd.DataFrame.from_dict(results_dict)
+            df.to_csv(reports_file + f"_{key}.csv")
+            print(df)
+            print("\n\n")
+        except ValueError as e:
+            print(e)
+            pass
+
+
+# def get_string_matches(annos, path_to_text, drugs, drug_length=3):
+#     """Add simple string matches based on a list of drugs."""
+#     tups = set()
+#     for line in annos:
+#         parts = str(line).split("\t")
+#         d = parts[-1]
+#         rem = parts[1].split()
+#         tups.add((d, rem[1], rem[2]))
+
+#     with open(path_to_text, "r") as read_handle:
+#         text = read_handle.read()
+
+#     matches = []
+#     # longest drug is 96 characters
+#     for drug in drugs:
+
+#         if len(drug) > drug_length:
+#             matches.extend(
+#                 [
+#                     (
+#                         text[match.start() : match.end()],
+#                         str(match.start()),
+#                         str(match.end()),
+#                     )
+#                     for match in re.finditer(re.escape(drug.lower()), text.lower())
+#                 ]
+#             )
+
+#     # print(f"tups: {tups}\n")
+#     # if set(matches) - tups:
+#     #     print(f"added: {set(matches) - tups}")
+#     tups.update(set(matches))
+#     # print(f"merged: {tups}\n-----------------------------------------\n")
+
+#     new_annos = []
+#     for i, tup in enumerate(tups):
+#         new_annos.append(f"T{i+1}\tDrug {tup[1]} {tup[2]}\t{tup[0]}")
+
+#     return new_annos
 
 
 def convert_documents_to_brat(
-    predictions, tokens, txt_files, data_url, output_dir, drugs=[], drug_length=3
+    predictions, tokens, txt_files, data_url, output_dir, test_data_identifier
 ):
     """Convert every given document to a brat file."""
     # convert the predictions per document back to brat documents
+    print("\nConverting documents to brat ...\n")
     for prediction, tokens, txt_file in zip(predictions, tokens, txt_files):
 
         assert len(tokens) == len(prediction)
-        path_to_text = os.path.join(data_url, "release1", txt_file + ".txt")
+
+        print(f"Current text file: {txt_file}")
+        # path_to_text = os.path.join(data_url, "dev", txt_file + ".txt")
+        path_to_text = os.path.join(data_url, test_data_identifier, txt_file + ".txt")
+
         # returns a list of annotation strings
         brat_anno, bio_str = convert(
             text_file=path_to_text, model_predictions=prediction, tokens=tokens
         )
-        if drugs:
-            brat_anno = get_string_matches(
-                annos=brat_anno,
-                path_to_text=path_to_text,
-                drugs=drugs,
-                drug_length=drug_length,
-            )
 
         file_name = os.path.basename(txt_file).split(".txt")[0]
+        write_conll(
+            output_dir=output_dir, conll_str=bio_str, file_name=f"{file_name}.conll"
+        )
+
         path = os.path.join(output_dir, f"{file_name}.ann")
 
         # create one file for every document
         with open(path, "w") as write_handle:
             for line in brat_anno:
+                # line = unicodedata.normalize("NFKD", str(line))
+
                 write_handle.write(str(line))
                 write_handle.write("\n")
 
@@ -87,75 +153,75 @@ def convert_documents_to_brat(
 #     return a == b == c
 
 
-def agree_2(a, b):
-    return a == b
+# def agree_2(a, b):
+#     return a == b
 
 
 def agree_5(a, b, c, d, e):
     return a == b == c == d == e
 
 
-def merge_predictions(pred_1, pred_2):
-    """..."""
-    final_predictions = []
-    not_agreed_counter = 0
-    for p1, p2 in zip(pred_1, pred_2):
-        previous_tag = "O"
-        final = []
+# def merge_predictions(pred_1, pred_2):
+#     """..."""
+#     final_predictions = []
+#     not_agreed_counter = 0
+#     for p1, p2 in zip(pred_1, pred_2):
+#         previous_tag = "O"
+#         final = []
 
-        for tag1, tag2 in zip(p1, p2):
-            # print(tag1, tag2)
-            # if agree_3(tag1, tag2):
-            #     # print("all same")
-            #     final.append(tag1)
+#         for tag1, tag2 in zip(p1, p2):
+#             # print(tag1, tag2)
+#             # if agree_3(tag1, tag2):
+#             #     # print("all same")
+#             #     final.append(tag1)
 
-            if agree_2(tag1, tag2):
-                # print("tag1 = tag2")
-                agreed_tag = tag1
-                print(f"agreed: {tag1} vs. {tag2} --> {agreed_tag}")
+#             if agree_2(tag1, tag2):
+#                 # print("tag1 = tag2")
+#                 agreed_tag = tag1
+#                 # print(f"agreed: {tag1} vs. {tag2} --> {agreed_tag}")
 
-            elif not agree_2(tag1, tag2):
-                not_agreed_counter += 1
+#             elif not agree_2(tag1, tag2):
+#                 not_agreed_counter += 1
 
-                if tag1 == "O" and tag2.endswith("Drug"):
-                    agreed_tag = tag2
-                elif tag2 == "O" and tag1.endswith("Drug"):
-                    agreed_tag = tag1
+#                 if tag1 == "O" and tag2.endswith("Drug"):
+#                     agreed_tag = tag2
+#                 elif tag2 == "O" and tag1.endswith("Drug"):
+#                     agreed_tag = tag1
 
-                elif tag1.startswith("I") and tag2.startswith("B"):
-                    agreed_tag = tag1
+#                 elif tag1.startswith("I") and tag2.startswith("B"):
+#                     agreed_tag = tag1
 
-                elif tag1.startswith("B") and tag2.startswith("I"):
-                    agreed_tag = tag2
+#                 elif tag1.startswith("B") and tag2.startswith("I"):
+#                     agreed_tag = tag2
 
-                else:
-                    assert False
+#                 else:
+#                     assert False
 
-                print(f"did not agree: {tag1} vs. {tag2} --> {agreed_tag}")
+#                 print(f"did not agree: {tag1} vs. {tag2} --> {agreed_tag}")
 
-            # elif agree_2(tag2):
-            #     # print("tag2 = tag3")
+#             # elif agree_2(tag2):
+#             #     # print("tag2 = tag3")
 
-            #     final.append(tag2)
+#             #     final.append(tag2)
 
-            # elif tag1 != tag2 and tag1 != tag3:
-            #     # print("tag1 != tag2 != tag3")
+#             # elif tag1 != tag2 and tag1 != tag3:
+#             #     # print("tag1 != tag2 != tag3")
 
-            #     final.append(tag1)
+#             #     final.append(tag1)
 
-            else:
-                print(tag1, tag2)
-                assert False
-            final.append(agreed_tag)
-            previous_tag = agreed_tag
+#             else:
+#                 print(tag1, tag2)
+#                 assert False
+#             final.append(agreed_tag)
+#             previous_tag = agreed_tag
 
-        final_predictions.append(final)
-        final = []
-        previous_tag = "O"
+#         final_predictions.append(final)
+#         final = []
+#         previous_tag = "O"
 
-    print(f"not agreed counter: {not_agreed_counter}")
+#     print(f"not agreed counter: {not_agreed_counter}")
 
-    return final_predictions
+#     return final_predictions
 
 
 def get_tag(freq_list):
@@ -191,15 +257,11 @@ def merge_predictions_5_models(pred_1, pred_2, pred_3, pred_4, pred_5):
         final = []
 
         for tag1, tag2, tag3, tag4, tag5 in zip(p1, p2, p3, p4, p5):
-            # print(tag1, tag2)
-            # if agree_3(tag1, tag2):
-            #     # print("all same")
-            #     final.append(tag1)
 
             if agree_5(tag1, tag2, tag3, tag4, tag5):
                 # print("tag1 = tag2")
                 agreed_tag = tag1
-                print(f"agreed: {tag1} vs. {tag2} --> {agreed_tag}")
+                # print(f"agreed: {tag1} vs. {tag2} --> {agreed_tag}")
 
             elif not agree_5(tag1, tag2, tag3, tag4, tag5):
                 not_agreed_counter += 1
@@ -207,41 +269,13 @@ def merge_predictions_5_models(pred_1, pred_2, pred_3, pred_4, pred_5):
                 counter = Counter([tag1, tag2, tag3, tag4, tag5])
 
                 majority_list = counter.most_common()
-                print(f"majority list: {majority_list}")
+                # print(f"majority list: {majority_list}")
 
                 if has_tie(majority_list):
                     agreed_tag = get_tag(majority_list)
 
                 else:
                     agreed_tag = majority_list[0][0]
-
-                # if tag1 == "O" and tag2.endswith("Drug"):
-                #     agreed_tag = tag2
-                # elif tag2 == "O" and tag1.endswith("Drug"):
-                #     agreed_tag = tag1
-
-                # elif tag1.startswith("I") and tag2.startswith("B"):
-                #     agreed_tag = tag1
-
-                # elif tag1.startswith("B") and tag2.startswith("I"):
-                #     agreed_tag = tag2
-
-                # else:
-                #     assert False
-
-                print(
-                    f"did not agree: {tag1} vs. {tag2} vs. {tag3}  vs. {tag4} vs. {tag5} --> {agreed_tag}"
-                )
-
-            # elif agree_2(tag2):
-            #     # print("tag2 = tag3")
-
-            #     final.append(tag2)
-
-            # elif tag1 != tag2 and tag1 != tag3:
-            #     # print("tag1 != tag2 != tag3")
-
-            #     final.append(tag1)
 
             else:
                 print(tag1, tag2, tag3, tag4, tag5)
@@ -254,7 +288,7 @@ def merge_predictions_5_models(pred_1, pred_2, pred_3, pred_4, pred_5):
         final = []
         previous_tag = "O"
 
-    print(f"not agreed counter: {not_agreed_counter}")
+    print(f"not agreed counter: {not_agreed_counter}/{len(pred_1)}")
 
     return final_predictions
 
@@ -271,11 +305,9 @@ if __name__ == "__main__":
     parser.add_argument("model_4", default=None, help="model path 4.")
     parser.add_argument("model_5", default=None, help="model path 5.")
 
-    # parser.add_argument("model_3", default=None, help="model path 3.")
-
-    parser.add_argument("drug_length", default=3, nargs="+", type=int)
-
     args = parser.parse_args()
+
+    assert args.model_1 != args.model_2 != args.model_3 != args.model_4 != args.model_5
 
     with open(os.path.join(args.model_1, "predictions.json"), "r") as d:
         predictions_1 = json.load(d)["predictions"]
@@ -291,9 +323,6 @@ if __name__ == "__main__":
 
     with open(os.path.join(args.model_5, "predictions.json"), "r") as d:
         predictions_5 = json.load(d)["predictions"]
-
-    # with open(os.path.join(args.model_3, "predictions.json"), "r") as d:
-    #     predictions_3 = json.load(d)["predictions"]
 
     drug_ner = DrugNER(args.config)
 
@@ -313,9 +342,38 @@ if __name__ == "__main__":
 
     # prepare the data (train & dev are prepared as well)
     drug_ner.prepare_data(model=cp_config["_name_or_path"])
-
+    # merged the predictions by majority vote
     merged_predictions = merge_predictions_5_models(
         predictions_1, predictions_2, predictions_3, predictions_4, predictions_5
+    )
+    # get the true labels
+    true_labels = [
+        [drug_ner.label_list[l] for l in label if l != -100]
+        for label in drug_ner.tokenized_datasets["test"]["labels"]
+    ]
+    # get the language for each test set sample
+    languages = drug_ner.tokenized_datasets["test"]["language"]
+
+    print(
+        classification_report(
+            y_true=true_labels, y_pred=merged_predictions, output_dict=False
+        )
+    )
+
+    target_folder = "ensembled_predictions"
+
+    path = "/".join(args.model_1.split("/")[:-1])
+    print(path)
+    predictions_output_dir = os.path.join(path, target_folder)
+
+    if not os.path.exists(predictions_output_dir):
+        os.makedirs(predictions_output_dir)
+
+    calculate_scores(
+        true_labels=true_labels,
+        merged_predictions=merged_predictions,
+        reports_file=os.path.join(path, "report_ensembled"),
+        languages=languages,
     )
 
     # transform the sentence chunks back to sentences per document
@@ -324,18 +382,11 @@ if __name__ == "__main__":
         drug_ner.tokenized_datasets["test"], merged_predictions
     )
 
-    dir_wo_string_matching = "ensemble_all_on_all/"
-
-    output_dir_wosm = os.path.join("models/final/", dir_wo_string_matching)
-
-    if not os.path.exists(output_dir_wosm):
-        os.makedirs(output_dir_wosm)
-
     convert_documents_to_brat(
         predictions=combined_predictions,
         tokens=combined_tokens,
         txt_files=txt_files,
         data_url=drug_ner.data_url,
-        output_dir=output_dir_wosm,
-        drugs=[],
+        output_dir=predictions_output_dir,
+        test_data_identifier=drug_ner.config["test"],
     )

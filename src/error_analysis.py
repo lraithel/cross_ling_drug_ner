@@ -20,9 +20,6 @@ import statistics
 from collections import defaultdict
 from copy import deepcopy
 
-import pandas as pd
-import sys
-
 index = {"Action": 0, "Negation": 1, "Temporality": 2, "Certainty": 3, "Actor": 4}
 
 
@@ -91,11 +88,11 @@ class Attribute(object):
 class RecordTrack1(object):
     """Record for Track 1 class."""
 
-    def __init__(self, file_path):
+    def __init__(self, file_path, mode="pred"):
         """Initialize."""
         self.path = os.path.abspath(file_path)
         self.basename = os.path.basename(self.path)
-        self.annotations = self._get_annotations()
+        self.annotations = self._get_annotations(mode=mode)
         # self.text = self._get_text()
 
     @property
@@ -106,7 +103,7 @@ class RecordTrack1(object):
     def attributes(self):
         return self.annotations["attributes"]
 
-    def _get_annotations(self):
+    def _get_annotations(self, mode="pred"):
         """Return a dictionary with all the annotations in the .ann file."""
         annotations = defaultdict(dict)
         with open(self.path) as annotation_file:
@@ -131,6 +128,7 @@ class RecordTrack1(object):
                         tag_id, tag_m, tag_text = line.strip().split("\t")
                     except ValueError:
                         print(self.path, line)
+
                     if len(tag_m.split(" ")) == 3:
                         tag_type, tag_start, tag_end = tag_m.split(" ")
                     elif len(tag_m.split(" ")) == 4:
@@ -140,39 +138,60 @@ class RecordTrack1(object):
                     else:
                         print(self.path)
                         print(line)
+
+                    if mode == "gold" and tag_type not in [
+                        "NoDisposition",
+                        "Disposition",
+                        "Undetermined",
+                        "Substance",
+                        "Medication",
+                        "MEDICATION",
+                        "substance",
+                        "CHEM",
+                        "NORMALIZABLES",
+                        "NO_NORMALIZABLES",
+                        "Drug",
+                    ]:
+                        continue
+                    elif mode == "gold":
+                        tag_type = "Drug"
+
                     tag_start, tag_end = int(tag_start), int(tag_end)
-                    if tag_id in t_e_mapper:
-                        annotations["tags"][tag_id] = ClinicalConcept(
-                            t_e_mapper[tag_id],
-                            tag_start,
-                            tag_end,
-                            e_etype_mapper[t_e_mapper[tag_id]],
-                            tag_text,
-                        )
+                    # if tag_id in t_e_mapper:
+                    #     annotations["tags"][tag_id] = ClinicalConcept(
+                    #         t_e_mapper[tag_id],
+                    #         tag_start,
+                    #         tag_end,
+                    #         e_etype_mapper[t_e_mapper[tag_id]],
+                    #         tag_text,
+                    #     )
+                    # annotations["tags"]["D_" + tag_id] = ClinicalConcept(
+                    #     "D_" + tag_id, tag_start, tag_end, "Drug", tag_text
+                    # )
                     annotations["tags"]["D_" + tag_id] = ClinicalConcept(
-                        "D_" + tag_id, tag_start, tag_end, "Drug", tag_text
+                        "D_" + tag_id, tag_start, tag_end, tag_type, tag_text
                     )
 
             attribute_mapper = dict()
 
-            for line_num, line in enumerate(lines):
-                if line.strip().startswith("A"):
-                    attr_id, attr_m = line.strip().split("\t")
-                    attr_type, attr_arg, attr_val = attr_m.split(" ")
-                    arg1 = annotations["tags"][e_t_mapper[attr_arg]]
-                    annotations["attributes"][attr_id] = Attribute(
-                        attr_id, arg1, attr_type, attr_val
-                    )
-                    if attr_arg not in attribute_mapper:
-                        attribute_mapper[attr_arg] = [""] * 5
-                    attribute_mapper[attr_arg][index[attr_type]] = attr_val
-            for key in attribute_mapper.keys():
-                annotations["attributes"]["combined_" + key] = Attribute(
-                    "combined_" + key,
-                    annotations["tags"][e_t_mapper[key]],
-                    "Combined",
-                    "_".join(attribute_mapper[key]),
-                )
+            # for line_num, line in enumerate(lines):
+            #     if line.strip().startswith("A"):
+            #         attr_id, attr_m = line.strip().split("\t")
+            #         attr_type, attr_arg, attr_val = attr_m.split(" ")
+            #         arg1 = annotations["tags"][e_t_mapper[attr_arg]]
+            #         annotations["attributes"][attr_id] = Attribute(
+            #             attr_id, arg1, attr_type, attr_val
+            #         )
+            #         if attr_arg not in attribute_mapper:
+            #             attribute_mapper[attr_arg] = [""] * 5
+            #         attribute_mapper[attr_arg][index[attr_type]] = attr_val
+            # for key in attribute_mapper.keys():
+            #     annotations["attributes"]["combined_" + key] = Attribute(
+            #         "combined_" + key,
+            #         annotations["tags"][e_t_mapper[key]],
+            #         "Combined",
+            #         "_".join(attribute_mapper[key]),
+            #     )
         return annotations
 
     def _get_text(self):
@@ -254,15 +273,51 @@ class Measures(object):
 class SingleEvaluator(object):
     """Evaluate two single files."""
 
+    def _remove_duplicate_tags(self, tags):
+        skip_indices = set()
+        dedup_tags = []
+        for i in range(0, len(tags)):
+            if i in skip_indices:
+                continue
+            for j in range(i + 1, len(tags)):
+                if tags[i].equals(tags[j]):
+                    skip_indices.add(j)
+            dedup_tags.append(tags[i])
+        return dedup_tags
+
+    def _remove_multiple_overlapping_tags(self, gol, sys, mode):
+        gol_matched = []
+        sys_check_tag = deepcopy(sys)
+        for s in sys:
+            for g in gol:
+                if g.equals(s, mode):
+                    if g not in gol_matched:
+                        gol_matched.append(g)
+                    else:
+                        if s in sys_check_tag:
+                            sys_check_tag.remove(s)
+        return sys_check_tag
+
+    def _get_tp(self, sys, gol, mode):
+        matched = set()
+        sys_matched = set()
+        for i in range(0, len(gol)):
+            g = gol[i]
+            for s in sys:
+                if g.equals(s, mode) and s.rid not in sys_matched:
+                    matched.add(g.rid)
+                    sys_matched.add(s.rid)
+                    break
+        return len(matched)
+
+        # len({g.rid for g in gol for s in sys if g.equals(s, mode)})
+
     def __init__(self, doc1, doc2, track, mode="strict", key=None, verbose=False):
         """Initialize."""
         assert isinstance(doc1, RecordTrack1)
         assert isinstance(doc2, RecordTrack1)
         assert mode in ("strict", "lenient")
         assert doc1.basename == doc2.basename
-        self.inspection_data = {}
-
-        self.inspection_data["file"] = doc1.basename
         self.scores = {
             "tags": {"tp": 0, "fp": 0, "fn": 0, "tn": 0},
             "attributes": {"tp": 0, "fp": 0, "fn": 0, "tn": 0},
@@ -278,7 +333,6 @@ class SingleEvaluator(object):
 
         sys_check_tag = self._remove_duplicate_tags(sys)
         gol_check_tag = self._remove_duplicate_tags(gol)
-
         # now evaluate
         # self.scores['tags']['tp'] = len({g.tid for g in gol_check_tag for s in sys_check_tag if g.equals(s, mode)})
         self.scores["tags"]["tp"] = self._get_tp(sys_check_tag, gol_check_tag, mode)
@@ -290,41 +344,17 @@ class SingleEvaluator(object):
         )
         self.scores["tags"]["tn"] = 0
 
-        # if verbose and track == 1:
-        if track == 1:
-
+        if verbose and track == 1:
             tps = {s for s in sys for g in gol if g.equals(s, mode)}
-            true_positives = [(tp.text, tp.start, tp.end) for tp in tps]
-
             fps = set(sys) - tps
-            false_positives = [(fp.text, fp.start, fp.end) for fp in fps]
-
             fns = set()
             for g in gol:
                 if not len([s for s in sys if s.equals(g, mode)]):
                     fns.add(g)
-
-            false_negatives = [(fn.text, fn.start, fn.end) for fn in fns]
-
-            # for e in fps:
-            #     print("FP: " + str(e))
-            # for e in fns:
-            #     print("FN:" + str(e))
-
-        # print(f"true positives: {true_positives}")
-        # print(f"false positives (found by system, but not in gold): {false_positives}")
-        # print(f"false negatives (not found by system): {false_negatives}")
-
-        self.inspection_data["TP"] = true_positives
-        self.inspection_data["#TP"] = len(true_positives)
-        self.inspection_data["#gold_entities"] = len(gol_check_tag)
-
-        self.inspection_data["FP"] = false_positives
-        self.inspection_data["#FP"] = len(false_positives)
-
-        self.inspection_data["FN"] = false_negatives
-        self.inspection_data["#FN"] = len(false_negatives)
-
+            for e in fps:
+                print("FP: " + str(e))
+            for e in fns:
+                print("FN:" + str(e))
         if track == 1:
             if key:
                 gol = [r for r in doc1.attributes.values() if r.rtype == key]
@@ -355,49 +385,6 @@ class SingleEvaluator(object):
                 for e in fns:
                     print("FN:" + str(e))
 
-    def _remove_duplicate_tags(self, tags):
-        skip_indices = set()
-        dedup_tags = []
-        for i in range(0, len(tags)):
-            if i in skip_indices:
-                continue
-            for j in range(i + 1, len(tags)):
-                if tags[i].equals(tags[j]):
-                    skip_indices.add(j)
-            dedup_tags.append(tags[i])
-        return dedup_tags
-
-    def _remove_multiple_overlapping_tags(self, gol, sys, mode):
-        gol_matched = []
-        sys_check_tag = deepcopy(sys)
-        for s in sys:
-            for g in gol:
-                if g.equals(s, mode):
-                    if g not in gol_matched:
-                        gol_matched.append(g)
-                    else:
-                        if s in sys_check_tag:
-                            sys_check_tag.remove(s)
-        return sys_check_tag
-
-    def _get_tp(self, sys, gol, mode):
-        matched = set()
-
-        sys_matched = set()
-        for i in range(0, len(gol)):
-            g = gol[i]
-            for s in sys:
-                # `equals` checks for span match (strict or lenient) and
-                # type match
-                if g.equals(s, mode) and s.rid not in sys_matched:
-                    matched.add(g.rid)
-                    sys_matched.add(s.rid)
-                    break
-
-        return len(matched)
-
-        # len({g.rid for g in gol for s in sys if g.equals(s, mode)})
-
 
 class MultipleEvaluator(object):
     """Evaluate two sets of files."""
@@ -407,7 +394,6 @@ class MultipleEvaluator(object):
         assert isinstance(corpora, Corpora)
         assert mode in ("strict", "lenient")
         self.scores = None
-        self.inspections = []
         self.track1(corpora, tag_type, mode, verbose)
 
     def track1(self, corpora, tag_type=None, mode="strict", verbose=False):
@@ -428,7 +414,14 @@ class MultipleEvaluator(object):
                 "micro": {"precision": 0, "recall": 0, "f1": 0},
             },
         }
-        self.tags = ("Drug", "Disposition", "NoDisposition", "Undetermined")
+        self.tags = (
+            "Drug",
+            "Disposition",
+            "NoDisposition",
+            "Undetermined",
+            "Substance",
+            "substance",
+        )
         self.attributes = (
             "Action",
             "Temporality",
@@ -448,16 +441,6 @@ class MultipleEvaluator(object):
                     fn=evaluator.scores[target]["fn"],
                     tn=evaluator.scores[target]["tn"],
                 )
-                if target == "tags":
-                    evaluator.inspection_data.update(
-                        {
-                            "prec": getattr(measures, "precision")(),
-                            "rec": getattr(measures, "recall")(),
-                            "F1": getattr(measures, "f1")(),
-                        }
-                    )
-
-            self.inspections.append(evaluator.inspection_data)
         for target in ("tags", "attributes"):
             measures = Measures(
                 tp=self.scores[target]["tp"],
@@ -471,37 +454,17 @@ class MultipleEvaluator(object):
 
 
 class Corpora(object):
-    def __init__(self, folder1, folder2, num_examples="all"):
+    def __init__(self, folder1, folder2):
         file_ext = "*.ann"
         self.folder1 = folder1
         self.folder2 = folder2
-        if num_examples == "all":
-            files1 = set(
-                [
-                    os.path.basename(f)
-                    for f in glob.glob(os.path.join(folder1, file_ext))
-                ]
-            )
-            files2 = set(
-                [
-                    os.path.basename(f)
-                    for f in glob.glob(os.path.join(folder2, file_ext))
-                ]
-            )
+        files1 = set(
+            [os.path.basename(f) for f in glob.glob(os.path.join(folder1, file_ext))]
+        )
+        files2 = set(
+            [os.path.basename(f) for f in glob.glob(os.path.join(folder2, file_ext))]
+        )
 
-        else:
-            files1 = set(
-                [
-                    os.path.basename(f)
-                    for f in glob.glob(os.path.join(folder1, file_ext))
-                ][:num_examples]
-            )
-            files2 = set(
-                [
-                    os.path.basename(f)
-                    for f in glob.glob(os.path.join(folder2, file_ext))
-                ][:num_examples]
-            )
         common_files = files1 & files2  # intersection
         if not common_files:
             print("ERROR: None of the files match.")
@@ -514,16 +477,33 @@ class Corpora(object):
                 print(", ".join(sorted(list(files2 - common_files))))
         self.docs = []
         for file in common_files:
-            g = RecordTrack1(os.path.join(self.folder1, file))
-            s = RecordTrack1(os.path.join(self.folder2, file))
+            # print(file)
+            g = RecordTrack1(os.path.join(self.folder1, file), mode="gold")
+
+            # print("\nGOLD:")
+            # for k, v in g.annotations["tags"].items():
+            #     print(f"k: {k}\t{v.ttype}")
+
+            # print("\n\n")
+
+            # print("\nPRED:")
+
+            s = RecordTrack1(os.path.join(self.folder2, file), mode="pred")
+
+            # for k, v in s.annotations["tags"].items():
+            #     print(f"k: {k}\t{v.ttype}")
+
+            # print("\n\n")
+
             self.docs.append((g, s))
+            # break
 
 
 def evaluate(corpora, mode="strict", verbose=False):
     """Run the evaluation by considering only files in the two folders."""
     assert mode in ("strict", "lenient")
-    # evaluator_s = MultipleEvaluator(corpora, verbose=verbose)
-    # evaluator_l = MultipleEvaluator(corpora, mode="lenient", verbose=verbose)
+    evaluator_s = MultipleEvaluator(corpora, verbose=verbose)
+    evaluator_l = MultipleEvaluator(corpora, mode="lenient", verbose=verbose)
     print()
     print("{:*^70}".format(" Evaluation n2c2 2022 Track 1 "))
     print("{:*^70}".format(" Contextualized Medication Event Extraction "))
@@ -538,13 +518,11 @@ def evaluate(corpora, mode="strict", verbose=False):
     )
     s_macro_precision, s_macro_recall, s_macro_f1 = [], [], []
     l_macro_precision, l_macro_recall, l_macro_f1 = [], [], []
-
     for tag in ["Drug"]:
         evaluator_tag_s = MultipleEvaluator(corpora, tag, verbose=verbose)
         evaluator_tag_l = MultipleEvaluator(
             corpora, tag, mode="lenient", verbose=verbose
         )
-
         print(
             "{:>20}  {:<5.4f}  {:<5.4f}  {:<5.4f}    {:<5.4f}  {:<5.4f}  {:<5.4f}".format(
                 tag.capitalize(),
@@ -556,12 +534,6 @@ def evaluate(corpora, mode="strict", verbose=False):
                 evaluator_tag_l.scores["tags"]["micro"]["f1"],
             )
         )
-
-    strict_dataframe = pd.DataFrame(evaluator_tag_s.inspections)
-    lenient_dataframe = pd.DataFrame(evaluator_tag_l.inspections)
-
-    return strict_dataframe, lenient_dataframe
-    sys.exit(1)
     print()
     print()
     print("{:*^70}".format(" Event Classification "))
@@ -571,8 +543,6 @@ def evaluate(corpora, mode="strict", verbose=False):
             "", "Prec.", "Rec.", "F(b=1)", "Prec.", "Rec.", "F(b=1)"
         )
     )
-    # print(f"strict scores: {evaluator_tag_s.scores}")
-
     s_macro_precision, s_macro_recall, s_macro_f1 = [], [], []
     l_macro_precision, l_macro_recall, l_macro_f1 = [], [], []
     for tag in ["Disposition", "NoDisposition", "Undetermined"]:
@@ -715,29 +685,15 @@ def evaluate(corpora, mode="strict", verbose=False):
     print("{:20}{:^48}".format("", "  {} files evaluated  ".format(len(corpora.docs))))
 
 
-def main(f1, f2, verbose, num_examples="all"):
-    corpora = Corpora(f1, f2, num_examples=num_examples)
+def main(f1, f2, verbose):
+    corpora = Corpora(f1, f2)
     if corpora.docs:
-        df_strict, df_lenient = evaluate(corpora, verbose=verbose)
-
-        return df_strict, df_lenient
+        evaluate(corpora, verbose=verbose)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="n2c2: Evaluation script for Track 1")
     parser.add_argument("folder1", help="First data folder path (gold)")
     parser.add_argument("folder2", help="Second data folder path (system)")
-    parser.add_argument("language", help="Choose one out of [all, de, en, fr, es]")
-
     args = parser.parse_args()
-
-    df_strict, df_lenient = main(
-        os.path.abspath(args.folder1),
-        os.path.abspath(args.folder2),
-        verbose=False,
-        num_examples=3,
-    )
-
-    print(df_strict)
-    print()
-    print(df_lenient)
+    main(os.path.abspath(args.folder1), os.path.abspath(args.folder2), False)

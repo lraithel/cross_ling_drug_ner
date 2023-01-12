@@ -350,7 +350,9 @@ if __name__ == "__main__":
                 y_true=true_labels, y_pred=predictions, output_dict=False
             )
         )
-        continue
+
+        # continue
+
         # transform the sentence chunks back to sentences per document
         # `predictions` is a list of lists of tags
         combined_predictions, combined_tokens, txt_files = utils.re_combine_documents(
