@@ -47,6 +47,7 @@ class DrugNER(object):
     def __init__(self, config, mode="train"):
         super(DrugNER, self).__init__()
 
+        self.mode = mode
         # load the "static" config params
         with open(config, "r") as read_handle:
             params = json.load(read_handle)
@@ -68,7 +69,7 @@ class DrugNER(object):
         self.data_url = self.config["data_url"]
 
         model_name = self.config["model_name"].split("/")[-1]
-        if mode == "train":
+        if self.mode == "train":
             self.out_dir = os.path.join(
                 self.config["out_dir"],
                 f"checkpoint_{model_name.replace('/', '-')}_{current_time}",
@@ -545,23 +546,42 @@ class DrugNER(object):
             fn_kwargs={"label_all_tokens": True},
         )
 
-        # remove features that are not necessary for training
-        self.tokenized_datasets = self.tokenized_datasets.remove_columns(
-            [
-                col
-                for col in self.tokenized_datasets["train"].features
-                if col
-                not in [
-                    "labels",
-                    "languages",
-                    "input_ids",
-                    "token_type_ids",
-                    "attention_mask",
-                    # "texts",
-                    # "file_ids",
+        if self.mode == "train":
+            # remove features that are not necessary for training
+            self.tokenized_datasets = self.tokenized_datasets.remove_columns(
+                [
+                    col
+                    for col in self.tokenized_datasets["train"].features
+                    if col
+                    not in [
+                        "labels",
+                        "languages",
+                        "input_ids",
+                        "token_type_ids",
+                        "attention_mask",
+                        # "texts",
+                        # "file_ids",
+                    ]
                 ]
-            ]
-        )
+            )
+        else:
+            # remove features that are not necessary for training
+            self.tokenized_datasets = self.tokenized_datasets.remove_columns(
+                [
+                    col
+                    for col in self.tokenized_datasets["train"].features
+                    if col
+                    not in [
+                        "labels",
+                        "languages",
+                        "input_ids",
+                        "token_type_ids",
+                        "attention_mask",
+                        "texts",
+                        "file_ids",
+                    ]
+                ]
+            )
 
     def train_model(self, model=None):
         trained_model = self.train_and_evaluate_model(model=model)

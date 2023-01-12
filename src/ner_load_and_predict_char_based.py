@@ -273,7 +273,10 @@ def convert_documents_to_brat(
         path = os.path.join(output_dir, f"{file_name}.ann")
 
         with open(path, "w") as write_handle:
-            write_handle.write(brat_anno)
+            if brat_anno != "":
+                write_handle.write(brat_anno)
+            else:
+                pass
     # for prediction, tokens, txt_file in zip(predictions, tokens, txt_files):
 
     #     assert len(tokens) == len(prediction)
