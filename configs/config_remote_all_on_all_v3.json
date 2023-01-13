@@ -5,7 +5,7 @@
   "dev": "dev",
   "epochs": 50,
   "out_dir": "/netscratch/raithel/projects/cross_ling_drug_detection/models/",
-  "patience": 4,
+  "patience": 3,
   "remove_all_except_drug": true,
   "save_best_model": true,
   "seed": 42,
