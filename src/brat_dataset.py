@@ -46,8 +46,8 @@ TAG_LIST = [
     "substance",  # seems to be not really related to medication
     "CHEM",
     "Drug",
+    "NO_NORMALIZABLES",  # make sure NO_NORMALIZABLES is listed before NORMALIZABLES
     "NORMALIZABLES",
-    "NO_NORMALIZABLES",
 ]
 
 
