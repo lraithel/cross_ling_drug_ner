@@ -1,0 +1,17 @@
+{
+  "cache_dir": "/netscratch/raithel/projects/cross_ling_drug_ner/",
+  "data_url": "/netscratch/raithel/projects/cross_ling_drug_ner/converted_fixed_v2/",
+  "debug": false,
+  "dev": "dev",
+  "epochs": 50,
+  "out_dir": "/netscratch/raithel/projects/cross_ling_drug_detection/models/",
+  "patience": 4,
+  "remove_all_except_drug": true,
+  "save_best_model": true,
+  "seed": 42,
+  "test": "test",
+  "train": "train",
+  "unify_tags": false,
+  "use_original_label_names": true,
+  "use_wandb": true
+}
