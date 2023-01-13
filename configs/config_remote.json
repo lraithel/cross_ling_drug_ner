@@ -1,9 +1,9 @@
 {
-  "data_url": "/netscratch/raithel/projects/cross_ling_drug_ner/converted/",
+  "data_url": "/netscratch/raithel/projects/cross_ling_drug_ner/converted_fixed_v2/",
   "debug": false,
   "dev": "dev",
   "epochs": 50,
-  "out_dir": "/netscratch/raithel/projects/cross_ling_drug_detection/models/",
+  "out_dir": "/netscratch/raithel/projects/cross_ling_drug_detection/models/second_run_all_all/",
   "patience": 4,
   "remove_all_except_drug": true,
   "seed": 42,
