@@ -347,16 +347,11 @@ class Brat(datasets.GeneratorBasedBuilder):
 
             annotations["spans"] = spans_sorted
 
-            # print(txt_content)
-
-            # print(spans_sorted)
-
-            # print(f"len labels: {len(labels)}\nlen text: {len(txt_content)}\n")
             for span in spans_sorted:
 
                 start = span["start"]
                 end = span["end"]
-                # print(f"start: {start}, end: {end}, len labels: {len(labels)}")
+
                 labels[start] = "B-Drug"
                 start += 1
                 while start < end:
@@ -366,14 +361,7 @@ class Brat(datasets.GeneratorBasedBuilder):
                         start += 1
                     except IndexError:
                         break
-            # print(f"final labels: {labels}")
 
-            # print(f"#####################\nANNOTATIONS:\n")
-
-            # for label, char in zip(labels, txt_content):
-            #     print(f"'{char}', {label})
-
-            # print("\n############################\n")
             annotations["labels"] = labels
 
             # the language is encoded at the very beginning of the files,
@@ -383,94 +371,6 @@ class Brat(datasets.GeneratorBasedBuilder):
             annotations["file_name"] = os.path.basename(file_name)
 
             yield file_name, annotations
-
-            # assert False
-
-        # for i, content_str in enumerate(data):
-
-        #     ann_fn = f"{files_without_ext[i]}.{self.config.ann_file_extension}"
-        #     annotations = Brat._read_annotation_file(ann_fn)
-
-        #     # if we unify tags to "Drug", we only need `ner_tags`, otherwise
-        #     # we use `token_labels`
-        #     # annotations.update(
-        #     #     {"tokens": [], "token_labels": [], "ner_tags": [], "language": ""}
-        #     # )
-        #     # get the corresponding txt file
-        #     txt_fn = f"{files_without_ext[i]}.{self.config.txt_file_extension}"
-
-        #     with open(txt_fn, "r", encoding="utf-8") as read_handle:
-        #         txt_content = read_handle.read()
-
-        #     # the language is encoded at the very beginning of the files,
-        #     # e.g. de_some_corpus.txt
-        #     annotations["language"] = os.path.basename(files_without_ext[i]).split("_")[
-        #         0
-        #     ]
-
-        #     annotations["context"] = txt_content
-
-        #     # split the conll string to lines, i.e. one line looks like this:
-        #     # "token \t tag"
-        #     lines = content_str.split("\n")
-        #     # remove the file name
-        #     file_name = lines.pop(0).strip()
-        #     annotations["file_name"] = file_name.replace("# doc_id = ", "")
-        #     last_line = None
-
-        #     annotations["tokens_per_sentence"] = []
-        #     annotations["tags_per_sentence"] = []
-        #     annotations["token_labels_per_sentence"] = []
-
-        #     tokens_per_sent = []
-        #     tags_per_sent = []
-        #     token_labels_per_sent = []
-
-        #     for j, line in enumerate(lines):
-
-        #         if line:
-        #             token, tag = line.split("\t")
-        #             annotations["tokens"].append(token)
-        #             tokens_per_sent.append(token)
-
-        #             # add the non-unified tag
-        #             annotations["token_labels"].append(tag)
-        #             token_labels_per_sent.append(tag)
-
-        #             unified_tag = Brat._unify_tags(tag)
-        #             annotations["ner_tags"].append(unified_tag)
-        #             tags_per_sent.append(unified_tag)
-
-        #         # an empty line indicates the end of one sentence
-        #         elif line == "" and tags_per_sent:
-
-        #             annotations["tokens_per_sentence"].append(tokens_per_sent)
-        #             annotations["tags_per_sentence"].append(tags_per_sent)
-        #             annotations["token_labels_per_sentence"].append(
-        #                 token_labels_per_sent
-        #             )
-
-        #             tokens_per_sent = []
-        #             tags_per_sent = []
-        #             token_labels_per_sent = []
-
-        #     assert (
-        #         len(annotations["ner_tags"])
-        #         == len(annotations["tokens"])
-        #         == len(annotations["token_labels"])
-        #     ), (
-        #         f"#tags ({len(annotations['ner_tags'])}) != #tokens "
-        #         f"({len(annotations['tokens'])}) != #token labels "
-        #         f"({len(annotations['token_labels'])})"
-        #     )
-
-        #     assert (
-        #         len(annotations["tokens_per_sentence"])
-        #         == len(annotations["tags_per_sentence"])
-        #         == len(annotations["token_labels_per_sentence"])
-        #     ), "#tokenized sentences != #tagged sentences != #token labels per sentence"
-
-        # yield files[i], annotations
 
     def _split_generators(self, dl_manager):
         """Returns SplitGenerators."""
