@@ -36,6 +36,20 @@ from datasets import (
 
 logger = logging.getLogger(__name__)
 
+TAG_LIST = [
+    "NoDisposition",
+    "Disposition",
+    "Undetermined",
+    "Substance",
+    "Medication",
+    "MEDICATION",
+    "substance",  # seems to be not really related to medication
+    "CHEM",
+    "Drug",
+    "NORMALIZABLES",
+    "NO_NORMALIZABLES",
+]
+
 
 @dataclass
 class BratConfig(BuilderConfig):
@@ -50,6 +64,7 @@ class BratConfig(BuilderConfig):
     file_name_blacklist: Optional[List[str]] = None
     unify_tags: bool = False
     remove_all_except_drug: bool = True
+    use_original_label_names: bool = False
     ann_file_extension: str = "ann"
     txt_file_extension: str = "txt"
 
@@ -75,6 +90,26 @@ class Brat(datasets.GeneratorBasedBuilder):
                                 "O",
                                 "B-Drug",
                                 "I-Drug",
+                                "B-NoDisposition",
+                                "B-Disposition",
+                                "B-Undetermined",
+                                "B-Substance",
+                                "B-Medication",
+                                "B-MEDICATION",
+                                "B-substance",  # seems to be not really related to medication
+                                "B-CHEM",
+                                "B-NORMALIZABLES",
+                                "B-NO_NORMALIZABLES",
+                                "I-NoDisposition",
+                                "I-Disposition",
+                                "I-Undetermined",
+                                "I-Substance",
+                                "I-Medication",
+                                "I-MEDICATION",
+                                "I-substance",  # seems to be not really related to medication
+                                "I-CHEM",
+                                "I-NORMALIZABLES",
+                                "I-NO_NORMALIZABLES",
                             ]
                         )
                     ),
@@ -329,25 +364,23 @@ class Brat(datasets.GeneratorBasedBuilder):
 
     def _unify_tags(tag, remove_all_except_drug=True):
         """Unify the three tag names to one label called `Drug`."""
-        tag_variations = [
-            "NoDisposition",
-            "Disposition",
-            "Undetermined",
-            "Substance",
-            "Medication",
-            "MEDICATION",
-            "substance",
-            "CHEM",
-            "Drug",
-        ]
 
-        for variant in tag_variations:
+        for variant in TAG_LIST:
             if tag.endswith(variant):
                 return tag.replace(variant, "Drug")
 
         if remove_all_except_drug:
             return "O"
         return tag
+
+    def _filter_tags(tag):
+        """Unify the three tag names to one label called `Drug`."""
+
+        for variant in TAG_LIST:
+            if tag.endswith(variant):
+                return tag
+
+        return "O"
 
     def _generate_examples(self, files=None, directory=None):
         """Read context (.txt) and annotation (.ann) files."""
@@ -383,19 +416,7 @@ class Brat(datasets.GeneratorBasedBuilder):
         # options.overlap_rule = "keep-shorter"
         options.overlap_rule = "keep-longer"
         # options.types = None
-        options.types = [
-            "NoDisposition",
-            "Disposition",
-            "Undetermined",
-            "Substance",
-            "Medication",
-            "MEDICATION",
-            "substance",  # seems to be not really related to medication
-            "CHEM",
-            "NORMALIZABLES",
-            "NO_NORMALIZABLES",
-            "Drug",
-        ]
+        options.types = TAG_LIST
         options.no_sentence_split = False  # this is not done very well
         options.exclude = None
         options.tokenization = "default"
@@ -461,9 +482,19 @@ class Brat(datasets.GeneratorBasedBuilder):
                     annotations["token_labels"].append(tag)
                     token_labels_per_sent.append(tag)
 
-                    unified_tag = Brat._unify_tags(tag)
-                    annotations["ner_tags"].append(unified_tag)
-                    tags_per_sent.append(unified_tag)
+                    if self.config.unify_tags:
+                        unified_tag = Brat._unify_tags(
+                            tag=tag,
+                            remove_all_except_drug=self.config.remove_all_except_drug,
+                        )
+                        annotations["ner_tags"].append(unified_tag)
+                        tags_per_sent.append(unified_tag)
+                    elif self.config.use_original_label_names:
+                        filtered_tag = Brat._filter_tags(tag)
+                        annotations["ner_tags"].append(filtered_tag)
+                        tags_per_sent.append(filtered_tag)
+                    else:
+                        assert False, "No filter mode given. Please check dataloader."
 
                 # an empty line indicates the end of one sentence
                 elif line == "" and tags_per_sent:

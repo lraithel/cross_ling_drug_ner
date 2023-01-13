@@ -516,6 +516,7 @@ class DrugNER(object):
             },
             url=self.config["data_url"],
             unify_tags=self.config["unify_tags"],
+            use_original_label_names=self.config["use_original_label_names"],
             remove_all_except_drug=self.config["remove_all_except_drug"],
             # cache_dir="../.cache/huggingface/datasets",
             download_mode="force_redownload",
