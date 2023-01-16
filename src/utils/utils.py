@@ -1,10 +1,10 @@
 """Utilities for data pre-processing."""
 
 import json
-
-# from pynvml import *
+import torch
 
 from itertools import chain
+from torch.utils.data import WeightedRandomSampler
 
 DELIMITER = "@"
 
@@ -18,6 +18,22 @@ with open("src/utils/lang_dict.json", "r") as read_handle:
 #     handle = nvmlDeviceGetHandleByIndex(0)
 #     info = nvmlDeviceGetMemoryInfo(handle)
 #     print(f"GPU memory occupied: {info.used//1024**2} MB.")
+
+
+def get_balancing_sampler(dataset, language_count, device):
+    """Create a data sampler based on the class weights."""
+    languages = dataset["language"].cpu()
+    language_count = torch.from_numpy(language_count)
+    language_count.to(device)
+    label_weights = 1 / language_count
+    print(f"language weights: {label_weights}, {type(label_weights)}")
+    sample_weight = torch.hstack([label_weights[label] for label in languages])
+
+    return WeightedRandomSampler(
+        weights=sample_weight.double(),
+        num_samples=len(sample_weight),
+        replacement=True,
+    )
 
 
 def sort_by_language(predictions, labels, languages):
@@ -168,7 +184,9 @@ def re_combine_windows(dataset, predictions):
     return all_tags, all_files, txt_file_ids
 
 
-def chunk_documents(documents, num_sentences=3, unify_tags=False):
+def chunk_documents(
+    documents, num_sentences=3, unify_tags=False, use_original_label_names=True
+):
     """Split each document in a sequence of `num_sentences` sentences."""
 
     file_name = documents["file_name"]
@@ -195,13 +213,18 @@ def chunk_documents(documents, num_sentences=3, unify_tags=False):
                 row[i : i + num_sentences] for i in range(0, len(row), num_sentences)
             ]
 
+    elif use_original_label_names:
+        for row in documents["tags_per_sentence"]:
+            chunks_tags += [
+                row[i : i + num_sentences] for i in range(0, len(row), num_sentences)
+            ]
+
     else:
         for row in documents["token_labels_per_sentence"]:
             chunks_tags += [
                 row[i : i + num_sentences] for i in range(0, len(row), num_sentences)
             ]
 
-    # print(chunks_tokens)
     return {
         "chunks_tokens": chunks_tokens,
         "chunks_tags": chunks_tags,

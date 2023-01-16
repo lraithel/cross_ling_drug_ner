@@ -86,31 +86,12 @@ class Brat(datasets.GeneratorBasedBuilder):
                     # need those below
                     "ner_tags": datasets.Sequence(
                         datasets.features.ClassLabel(
-                            names=[
-                                "O",
-                                "B-Drug",
-                                "I-Drug",
-                                "B-NoDisposition",
-                                "B-Disposition",
-                                "B-Undetermined",
-                                "B-Substance",
-                                "B-Medication",
-                                "B-MEDICATION",
-                                "B-substance",  # seems to be not really related to medication
-                                "B-CHEM",
-                                "B-NORMALIZABLES",
-                                "B-NO_NORMALIZABLES",
-                                "I-NoDisposition",
-                                "I-Disposition",
-                                "I-Undetermined",
-                                "I-Substance",
-                                "I-Medication",
-                                "I-MEDICATION",
-                                "I-substance",  # seems to be not really related to medication
-                                "I-CHEM",
-                                "I-NORMALIZABLES",
-                                "I-NO_NORMALIZABLES",
-                            ]
+                            names_file="src/utils/entities_unified.txt"
+                        )
+                    ),
+                    "ner_tags_non_unified": datasets.Sequence(
+                        datasets.features.ClassLabel(
+                            names_file="src/utils/entities.txt"
                         )
                     ),
                     # this is the list of all available token labels
@@ -438,7 +419,13 @@ class Brat(datasets.GeneratorBasedBuilder):
             # if we unify tags to "Drug", we only need `ner_tags`, otherwise
             # we use `token_labels`
             annotations.update(
-                {"tokens": [], "token_labels": [], "ner_tags": [], "language": ""}
+                {
+                    "tokens": [],  # standard tokens
+                    "token_labels": [],  # all labels
+                    "ner_tags": [],  # unified NER tags (only Drug)
+                    "language": "",  # the language per file
+                    "ner_tags_non_unified": [],  # non unified NER tags (only relevant ones)
+                }
             )
 
             # get the corresponding txt file
@@ -489,12 +476,16 @@ class Brat(datasets.GeneratorBasedBuilder):
                         )
                         annotations["ner_tags"].append(unified_tag)
                         tags_per_sent.append(unified_tag)
+
                     elif self.config.use_original_label_names:
+
                         filtered_tag = Brat._filter_tags(tag)
-                        annotations["ner_tags"].append(filtered_tag)
+                        annotations["ner_tags_non_unified"].append(filtered_tag)
                         tags_per_sent.append(filtered_tag)
                     else:
-                        assert False, "No filter mode given. Please check dataloader."
+                        assert (
+                            False
+                        ), "No filter mode given => not implemented. Please check dataloader."
 
                 # an empty line indicates the end of one sentence
                 elif line == "" and tags_per_sent:
@@ -509,15 +500,17 @@ class Brat(datasets.GeneratorBasedBuilder):
                     tags_per_sent = []
                     token_labels_per_sent = []
 
-            assert (
-                len(annotations["ner_tags"])
-                == len(annotations["tokens"])
-                == len(annotations["token_labels"])
-            ), (
-                f"#tags ({len(annotations['ner_tags'])}) != #tokens "
-                f"({len(annotations['tokens'])}) != #token labels "
-                f"({len(annotations['token_labels'])})"
-            )
+            # assert (
+            #     len(annotations["ner_tags"])
+            #     == len(annotations["tokens"])
+            #     == len(annotations["token_labels"])
+            # ), (
+            #     f"#ner tags ({len(annotations['ner_tags'])}) != #tokens "
+            #     f"({len(annotations['tokens'])}) != #token labels "
+            #     f"({len(annotations['token_labels'])})"
+            # )
+
+            # print(annotations["ner_tags_non_unified"])
 
             assert (
                 len(annotations["tokens_per_sentence"])

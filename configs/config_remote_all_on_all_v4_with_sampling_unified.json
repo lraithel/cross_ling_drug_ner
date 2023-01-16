@@ -4,15 +4,15 @@
   "debug": false,
   "dev": "dev",
   "epochs": 50,
-  "out_dir": "/netscratch/raithel/projects/cross_ling_drug_detection/models/",
+  "out_dir": "/netscratch/raithel/projects/cross_ling_drug_detection/models/weighted_random_sampling/unified_labels/",
   "patience": 3,
   "remove_all_except_drug": true,
   "save_best_model": true,
   "seed": 42,
   "test": "test",
   "train": "train",
-  "unify_tags": false,
-  "use_original_label_names": true,
+  "unify_tags": true,
+  "use_original_label_names": false,
   "use_wandb": true,
   "use_weighted_sampling": true
 
