@@ -1,5 +1,4 @@
 """..."""
-# from datasets import DatasetDict
 from datasets import load_dataset
 from datasets import load_metric
 from datetime import datetime
@@ -14,9 +13,6 @@ from transformers import CanineForTokenClassification
 from transformers import CanineTokenizer
 from transformers import DataCollatorForTokenClassification
 from transformers import get_scheduler
-
-# from transformers import set_seed
-
 
 import argparse
 import evaluate
@@ -119,15 +115,6 @@ class DrugNER(object):
                 label2id=self.label2id,
             )
 
-    # def convert_to_unicode_id(self, documents):
-    #     """Turn each character into its unicode code point id."""
-
-    #     input_ids = torch.tensor([[ord(char) for char in text]])
-    #     tokenized_inputs["labels"] = labels
-    #     tokenized_inputs["sub_tokens"] = sub_tokens_all
-
-    #     return converted_inputs
-
     def tokenize_and_align_labels(self, documents, label_all_tokens=True):
         """Align the labels with the IDs.
 
@@ -162,7 +149,6 @@ class DrugNER(object):
 
         # preparation for sub-token-based models
         else:
-
             # sub-tokenize input sentences and convert to IDs
             tokenized_inputs = self.tokenizer(
                 chunked_tokens,
@@ -255,7 +241,6 @@ class DrugNER(object):
             predictions=cleaned_predictions, labels=true_labels, languages=languages
         )
         for language, outputs in sorted_by_language.items():
-
             results_trad_per_lang = self.trad_eval.compute(
                 predictions=outputs["predictions"],
                 references=outputs["true_labels"],
@@ -408,13 +393,11 @@ class DrugNER(object):
         best_model = None
 
         for epoch in range(num_epochs):
-
             wandb.log({"current_epoch": epoch})
 
             self.model.train()
 
             for batch in train_dataloader:
-
                 batch = {k: v.to(device) for k, v in batch.items()}
 
                 inputs = {
@@ -486,17 +469,11 @@ class DrugNER(object):
                 )
 
                 if self.config["save_best_model"]:
-                    # model_path = os.path.join(
-                    #     self.out_dir,
-                    #     f"checkpoint_{model_name.replace('/', '-')}_{current_time}.pth",
-                    # )
                     wandb.log({"model_id": self.out_dir})
 
                     self.tokenizer.save_pretrained(self.out_dir)
 
                     best_model.save_pretrained(self.out_dir)
-
-            # utils.print_gpu_utilization()
 
             if es.step(current_macro_f1):
                 print(f"Stopping training with F1 of {current_macro_f1}.")
@@ -519,14 +496,13 @@ class DrugNER(object):
             unify_tags=self.config["unify_tags"],
             remove_all_except_drug=self.config["remove_all_except_drug"],
             use_original_label_names=self.config.get("use_original_label_names", False),
-            # cache_dir="../.cache/huggingface/datasets",
+            cache_dir="../.cache/huggingface/datasets",
             download_mode="force_redownload",
-            cache_dir=self.config["cache_dir"],
         )
 
-        print(self.config["data_url"])
-
-        # dataset = load_dataset('dfki-nlp/brat', **kwargs)
+        assert self.config.get("use_original_label_names", False) != self.config.get(
+            "unify_tags", False
+        )
 
         if self.config["unify_tags"]:
             self.label_list = datasets["train"].features["ner_tags"].feature.names
@@ -607,21 +583,14 @@ class DrugNER(object):
 
 
 if __name__ == "__main__":
-
     parser = argparse.ArgumentParser()
 
     parser.add_argument("config", default=None, help="Path to config file.")
 
     args = parser.parse_args()
 
-    # utils.print_gpu_utilization()
-
     drug_ner = DrugNER(args.config)
 
     drug_ner.prepare_data()
 
     trained_model = drug_ner.train_model()
-
-    # dataset, predictions, results = drug_ner.evaluate_on_testset(model=trained_model)
-
-    # print(results)

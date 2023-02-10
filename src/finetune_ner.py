@@ -416,7 +416,7 @@ class DrugNER(object):
 
                 batch = {k: v.to(device) for k, v in batch.items()}
 
-                print(batch["language"])
+                # print(batch["language"])
 
                 inputs = {
                     "input_ids": batch["input_ids"],
