@@ -271,17 +271,8 @@ if __name__ == "__main__":
         # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_07",
         # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_51",
         # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_39"
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_42",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_24",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_10",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_15_52",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_15_33"
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/es/checkpoint_xlm-roberta-base_22_12_24_16_41",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/es/checkpoint_xlm-roberta-base_22_12_24_16_23",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/es/checkpoint_xlm-roberta-base_22_12_24_16_11",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/es/checkpoint_xlm-roberta-base_22_12_24_15_48",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/es/checkpoint_xlm-roberta-base_22_12_24_15_31"
- ]
+        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_42"
+        "/netscratch/raithel/projects/cross_ling_drug_ner/models/weighted_random_sampling/original_labels/checkpoint_xlm-roberta-base_23_01_19_11_37"]
 
     for no, checkpoint_dir in enumerate(checkpoint_dirs):
 
@@ -351,7 +342,7 @@ if __name__ == "__main__":
             )
         )
 
-        # continue
+        continue
 
         # transform the sentence chunks back to sentences per document
         # `predictions` is a list of lists of tags

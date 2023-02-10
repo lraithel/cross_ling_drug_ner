@@ -517,14 +517,18 @@ class DrugNER(object):
             url=self.config["data_url"],
             unify_tags=self.config["unify_tags"],
             remove_all_except_drug=self.config["remove_all_except_drug"],
-            # cache_dir="../.cache/huggingface/datasets",
-            # download_mode="force_redownload",
-            cache_dir=self.config["cache_dir"],
+            use_original_label_names=self.config.get("use_original_label_names", False),
+            cache_dir="../.cache/huggingface/datasets",
+            download_mode="force_redownload",
+            # cache_dir=self.config["cache_dir"],
         )
 
         print(self.config["data_url"])
 
         # dataset = load_dataset('dfki-nlp/brat', **kwargs)
+        assert self.config.get("use_original_label_names", False) != self.config.get(
+            "unify_tags", False
+        )
 
         if self.config["unify_tags"]:
             self.label_list = datasets["train"].features["ner_tags"].feature.names
@@ -542,6 +546,8 @@ class DrugNER(object):
             fn_kwargs={
                 "num_sentences": self.config["num_sentences"],
                 "unify_tags": self.config["unify_tags"],
+                "use_original_label_names": self.config.get(
+                    "use_original_label_names", False),
             },
             batched=True,
             remove_columns=datasets["train"].column_names,
