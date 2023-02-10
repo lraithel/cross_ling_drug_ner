@@ -3,7 +3,7 @@
   "debug": false,
   "dev": "dev",
   "epochs": 100,
-  "out_dir": "/netscratch/raithel/projects/cross_ling_drug_detection/models/",
+  "out_dir": "/netscratch/raithel/projects/cross_ling_drug_ner/models/",
   "patience": 3,
   "remove_all_except_drug": true,
   "seed": 42,

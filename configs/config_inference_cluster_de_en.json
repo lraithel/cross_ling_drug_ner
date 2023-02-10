@@ -1,7 +1,7 @@
 {
   "batch_size": 32,
   "chunk_sentences": true,
-  "data_url": "data/converted/clusters/de_en",
+  "data_url": "data/converted_fixed_v2/by_cluster/de_en",
   "debug": true,
   "dev": "dev",
   "epochs": 50,

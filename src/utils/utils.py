@@ -1,6 +1,7 @@
 """Utilities for data pre-processing."""
 
 import json
+import re
 import torch
 
 from itertools import chain
@@ -18,6 +19,63 @@ with open("src/utils/lang_dict.json", "r") as read_handle:
 #     handle = nvmlDeviceGetHandleByIndex(0)
 #     info = nvmlDeviceGetMemoryInfo(handle)
 #     print(f"GPU memory occupied: {info.used//1024**2} MB.")
+
+
+def post_process_span(start, end, text, counter):
+    """Post-process the selected spans to remove white space etc."""
+    span = text[start:end]
+
+    entity_counter = 1
+    brat_anno = ""
+
+    if start == end:
+        return "", 0
+
+    if len(span) <= 1:
+        return "", 0
+
+    if span != span.strip():
+        print(f"span: '{span}")
+
+        parts = re.split(r"(\W)", span)
+
+        for part in parts:
+            if part in ("\n", "", "\t", " "):
+                start += 1
+            if part != "":
+                break
+
+        for part in parts[::-1]:
+            if part in ("\n", "", "\t", " "):
+                end -= 1
+            if part != "":
+                break
+
+        if start != end:
+            span = text[start:end]
+
+            brat_anno = f"T{counter}\tDrug {start} {end}\t{span}\n"
+
+    elif "\n" in span:
+        original = span
+        ent_list = re.split(r"(\W)", span)
+
+        # go over the single entities
+        for i, e in enumerate(ent_list):
+            current_start = start
+            current_end = current_start + len(e)
+            if e not in ("\n", "", "\t", " "):
+                if len(e) >= 2 and current_start != current_end:
+                    span = text[current_start:current_end]
+                    brat_anno += f"T{counter + entity_counter}\tDrug {current_start} {current_end}\t{span}\n"
+                    entity_counter += 1
+
+            start = current_end
+
+    else:
+        brat_anno = f"T{counter}\tDrug {start} {end}\t{span}\n"
+
+    return brat_anno, entity_counter
 
 
 def get_balancing_sampler(dataset, language_count, device):
@@ -189,16 +247,21 @@ def chunk_documents(
 ):
     """Split each document in a sequence of `num_sentences` sentences."""
 
-    file_name = documents["file_name"]
+    file_names = documents["file_name"]
+    tokens_per_sentence = documents["tokens_per_sentence"]
+    language = documents["language"]
+    # token_offsets = documents["token_offsets"]
 
     chunks_tokens = []
     chunks_tags = []
     file_ids = []
     languages = []
 
-    for file_name, row, lang in zip(
-        documents["file_name"], documents["tokens_per_sentence"], documents["language"]
-    ):
+    # we do not need the offsets per chunk, only per file name, so
+    # we just multiply them and add them to every chunk
+    # token_offsets_per_chunk = []
+
+    for file_name, row, lang in zip(file_names, tokens_per_sentence, language):
         chunks = [row[i : i + num_sentences] for i in range(0, len(row), num_sentences)]
         chunks_tokens += chunks
 
@@ -206,6 +269,8 @@ def chunk_documents(
         file_ids += [f"{file_name}{DELIMITER}{j}" for j in range(0, len(chunks))]
         # add the language for every chunk
         languages += [lang2id[lang]] * len(chunks)
+
+        # token_offsets_per_chunk += tok_ofs_per_file
 
     if unify_tags:
         for row in documents["tags_per_sentence"]:
@@ -230,6 +295,7 @@ def chunk_documents(
         "chunks_tags": chunks_tags,
         "file_ids": file_ids,
         "language": languages,
+        # "token_offsets": token_offsets_per_chunk,
     }
 
 

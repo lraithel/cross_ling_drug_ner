@@ -2,6 +2,7 @@ import argparse
 import evaluate
 import json
 import os
+import random
 import re
 
 import pandas as pd
@@ -17,6 +18,20 @@ from seqeval.metrics import classification_report
 with open("src/utils/lang_dict.json", "r") as read_handle:
     lang2id = json.load(read_handle)
     id2lang = {value: key for key, value in lang2id.items()}
+
+TAG_LIST = [
+    "NoDisposition",
+    "Disposition",
+    "Undetermined",
+    "Substance",
+    "Medication",
+    "MEDICATION",
+    "substance",  # seems to be not really related to medication
+    "CHEM",
+    "Drug",
+    "NO_NORMALIZABLES",  # make sure NO_NORMALIZABLES is listed before NORMALIZABLES
+    "NORMALIZABLES",
+]
 
 
 def calculate_scores(true_labels, merged_predictions, languages, reports_file):
@@ -73,47 +88,6 @@ def calculate_scores(true_labels, merged_predictions, languages, reports_file):
             pass
 
 
-# def get_string_matches(annos, path_to_text, drugs, drug_length=3):
-#     """Add simple string matches based on a list of drugs."""
-#     tups = set()
-#     for line in annos:
-#         parts = str(line).split("\t")
-#         d = parts[-1]
-#         rem = parts[1].split()
-#         tups.add((d, rem[1], rem[2]))
-
-#     with open(path_to_text, "r") as read_handle:
-#         text = read_handle.read()
-
-#     matches = []
-#     # longest drug is 96 characters
-#     for drug in drugs:
-
-#         if len(drug) > drug_length:
-#             matches.extend(
-#                 [
-#                     (
-#                         text[match.start() : match.end()],
-#                         str(match.start()),
-#                         str(match.end()),
-#                     )
-#                     for match in re.finditer(re.escape(drug.lower()), text.lower())
-#                 ]
-#             )
-
-#     # print(f"tups: {tups}\n")
-#     # if set(matches) - tups:
-#     #     print(f"added: {set(matches) - tups}")
-#     tups.update(set(matches))
-#     # print(f"merged: {tups}\n-----------------------------------------\n")
-
-#     new_annos = []
-#     for i, tup in enumerate(tups):
-#         new_annos.append(f"T{i+1}\tDrug {tup[1]} {tup[2]}\t{tup[0]}")
-
-#     return new_annos
-
-
 def convert_documents_to_brat(
     predictions, tokens, txt_files, data_url, output_dir, test_data_identifier
 ):
@@ -149,94 +123,34 @@ def convert_documents_to_brat(
                 write_handle.write("\n")
 
 
-# def agree_3(a, b, c):
-#     return a == b == c
-
-
-# def agree_2(a, b):
-#     return a == b
-
-
 def agree_5(a, b, c, d, e):
     return a == b == c == d == e
-
-
-# def merge_predictions(pred_1, pred_2):
-#     """..."""
-#     final_predictions = []
-#     not_agreed_counter = 0
-#     for p1, p2 in zip(pred_1, pred_2):
-#         previous_tag = "O"
-#         final = []
-
-#         for tag1, tag2 in zip(p1, p2):
-#             # print(tag1, tag2)
-#             # if agree_3(tag1, tag2):
-#             #     # print("all same")
-#             #     final.append(tag1)
-
-#             if agree_2(tag1, tag2):
-#                 # print("tag1 = tag2")
-#                 agreed_tag = tag1
-#                 # print(f"agreed: {tag1} vs. {tag2} --> {agreed_tag}")
-
-#             elif not agree_2(tag1, tag2):
-#                 not_agreed_counter += 1
-
-#                 if tag1 == "O" and tag2.endswith("Drug"):
-#                     agreed_tag = tag2
-#                 elif tag2 == "O" and tag1.endswith("Drug"):
-#                     agreed_tag = tag1
-
-#                 elif tag1.startswith("I") and tag2.startswith("B"):
-#                     agreed_tag = tag1
-
-#                 elif tag1.startswith("B") and tag2.startswith("I"):
-#                     agreed_tag = tag2
-
-#                 else:
-#                     assert False
-
-#                 print(f"did not agree: {tag1} vs. {tag2} --> {agreed_tag}")
-
-#             # elif agree_2(tag2):
-#             #     # print("tag2 = tag3")
-
-#             #     final.append(tag2)
-
-#             # elif tag1 != tag2 and tag1 != tag3:
-#             #     # print("tag1 != tag2 != tag3")
-
-#             #     final.append(tag1)
-
-#             else:
-#                 print(tag1, tag2)
-#                 assert False
-#             final.append(agreed_tag)
-#             previous_tag = agreed_tag
-
-#         final_predictions.append(final)
-#         final = []
-#         previous_tag = "O"
-
-#     print(f"not agreed counter: {not_agreed_counter}")
-
-#     return final_predictions
 
 
 def get_tag(freq_list):
     """If there is a tie between majorities, always settle on the I-drug."""
 
-    if freq_list[0][0].endswith("Drug") and freq_list[1][0].endswith("Drug"):
-        return "I-Drug"
+    for tag_variant in TAG_LIST:
 
-    if freq_list[0][0].endswith("Drug") and not freq_list[1][0].endswith("Drug"):
-        return "I-Drug"
+        if freq_list[0][0].endswith(tag_variant) and freq_list[1][0].endswith(
+            tag_variant
+        ):
+            return f"I-{tag_variant}"
+
+        if freq_list[0][0].endswith(tag_variant) and not freq_list[1][0].endswith(
+            tag_variant
+        ):
+            return f"I-{tag_variant}"
 
     # if something tagged as drug has the same amount of votes as the "O",
     # always choose drug (and I-Drug, because it is converted to B if necessary)
     if freq_list[0][0] == "O":
         return "I-Drug"
+    # if we have a tie between two different labels (that are not "O"),
+    # randomly choose either the first or the second
+    elif freq_list[0][0] != "O" and freq_list[0][1] != "O":
+        rand_int = random.randint(0, 1)
+        return freq_list[rand_int][0]
     else:
         assert False, f"can't decide tie: {freq_list}"
 
@@ -307,7 +221,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    assert args.model_1 != args.model_2 != args.model_3 != args.model_4 != args.model_5
+    # assert args.model_1 != args.model_2 != args.model_3 != args.model_4 != args.model_5
 
     with open(os.path.join(args.model_1, "predictions.json"), "r") as d:
         predictions_1 = json.load(d)["predictions"]

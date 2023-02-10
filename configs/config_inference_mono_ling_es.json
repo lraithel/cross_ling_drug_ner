@@ -1,7 +1,7 @@
 {
   "batch_size": 32,
   "chunk_sentences": true,
-  "data_url": "data/converted/by_language/es",
+  "data_url": "data/converted_fixed_v2/by_language/es",
   "debug": true,
   "dev": "dev",
   "epochs": 50,

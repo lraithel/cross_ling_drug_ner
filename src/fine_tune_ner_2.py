@@ -81,6 +81,7 @@ class DrugNER(object):
         self.label_list = []
         self.label2id = {}
         self.id2label = {}
+        self.token_offsets_per_file = {"train": {}, "dev": {}, "test": {}}
 
         # load the traditional and "fair" eval metrics
         self.trad_eval = evaluate.load("seqeval")
@@ -517,8 +518,9 @@ class DrugNER(object):
             url=self.config["data_url"],
             unify_tags=self.config["unify_tags"],
             remove_all_except_drug=self.config["remove_all_except_drug"],
+            use_original_label_names=self.config.get("use_original_label_names", False),
             # cache_dir="../.cache/huggingface/datasets",
-            # download_mode="force_redownload",
+            download_mode="force_redownload",
             cache_dir=self.config["cache_dir"],
         )
 
@@ -536,12 +538,22 @@ class DrugNER(object):
 
         print(datasets)
 
+        # collect the token offsets for inference
+        for key, _ in self.token_offsets_per_file.items():
+            for file_name, token_offs in zip(
+                datasets[key]["file_name"], datasets[key]["token_offsets"]
+            ):
+                self.token_offsets_per_file[key][file_name] = token_offs
+
         # split the documents in chunks of x sentences (results in lists of lists of tokens)
         datasets = datasets.map(
             utils.chunk_documents,
             fn_kwargs={
                 "num_sentences": self.config["num_sentences"],
                 "unify_tags": self.config["unify_tags"],
+                "use_original_label_names": self.config.get(
+                    "use_original_label_names", False
+                ),
             },
             batched=True,
             remove_columns=datasets["train"].column_names,
@@ -579,9 +591,12 @@ class DrugNER(object):
                     "attention_mask",
                     "sub_tokens",
                     "file_ids",
+                    "token_offsets",
                 ]
             ]
         )
+
+        print(self.tokenized_datasets)
 
     def train_model(self, model=None):
         trained_model = self.train_and_evaluate_model(model=model)

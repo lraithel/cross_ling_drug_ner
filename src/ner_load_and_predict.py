@@ -128,43 +128,6 @@ def load_model_from_checkpoint(path_to_checkpoint, trainer, batch_size):
     return trainer
 
 
-def get_string_matches(annos, path_to_text, drugs, drug_length=3):
-    """Add simple string matches based on a list of drugs."""
-    tups = set()
-    for line in annos:
-        parts = str(line).split("\t")
-        d = parts[-1]
-        rem = parts[1].split()
-        tups.add((d, rem[1], rem[2]))
-
-    with open(path_to_text, "r") as read_handle:
-        text = read_handle.read()
-
-    matches = []
-    # longest drug is 96 characters
-    for drug in drugs:
-
-        if len(drug) > drug_length:
-            matches.extend(
-                [
-                    (
-                        text[match.start() : match.end()],
-                        str(match.start()),
-                        str(match.end()),
-                    )
-                    for match in re.finditer(re.escape(drug.lower()), text.lower())
-                ]
-            )
-
-    tups.update(set(matches))
-
-    new_annos = []
-    for i, tup in enumerate(tups):
-        new_annos.append(f"T{i+1}\tDrug {tup[1]} {tup[2]}\t{tup[0]}")
-
-    return new_annos
-
-
 def write_conll(output_dir, conll_str, file_name):
     dir_ = "/".join(output_dir.split("/")[:-1])
     conll_anno_dir = os.path.join(dir_, "conll_predictions")
@@ -183,15 +146,151 @@ def write_conll(output_dir, conll_str, file_name):
             raise e
 
 
-def convert_documents_to_brat(
-    predictions, tokens, txt_files, data_url, output_dir, test_data_identifier
+# def convert_documents_to_brat(
+#     predictions,
+#     tokens,
+#     txt_files,
+#     data_url,
+#     output_dir,
+#     test_data_identifier,
+#     token_offsets_per_file,
+# ):
+
+#     for prediction_per_file, tokens_per_file, txt_file in zip(
+#         predictions, tokens, txt_files
+#     ):
+
+#         path_to_text = os.path.join(data_url, test_data_identifier, txt_file + ".txt")
+
+#         with open(path_to_text, "r") as read_handle:
+#             text = read_handle.read()
+
+#         token_counter = 0
+#         brat_anno = ""
+#         previous_pred = ""
+#         anno_counter = 0
+#         start = 0
+#         end = 0
+
+#         token_offsets = token_offsets_per_file[
+#             os.path.basename(txt_file).split(".txt")[0]
+#         ]
+
+#         for token_list, pred_list in zip(tokens_per_file, prediction_per_file):
+#             for token, pred in zip(token_list, pred_list):
+
+#                 # get the offset for the current token
+#                 offsets = token_offsets[token_counter]
+#                 token_start = offsets[0]
+#                 token_end = offsets[1]
+#                 if token_counter > 0:
+#                     previous_token_end = token_offsets[token_counter - 1][1]
+
+#                 print(
+#                     f"pred: {pred}, offsets: {offsets}, token_counter: {token_counter}, len doc: {len(text)}\ntoken: '{token}' | textspan: '{text[token_start: token_end]}'"
+#                 )
+
+#                 # usually, a relevant prediction starts with B
+#                 if pred == "B-Drug":
+#                     start = token_start
+
+#                 # if we encounter an I that was preceded by an I, we are in the middle of a span
+#                 elif pred == "I-Drug" and previous_pred in ("I-Drug", "B-Drug"):
+#                     # if we arrive at the very last character
+#                     if token_end == len(pred_list) - 1:
+#                         end = token_end
+#                         if start == end and start != 0:
+#                             assert (
+#                                 False
+#                             ), f"token_counter: {token_counter}, pred: {pred}, token: {token} --> prev pred: {previous_pred}"
+
+#                         # if the start ID is the same as the end ID, we ignore this span
+#                         if start == end or end < start:
+#                             previous_pred = pred
+#                             continue
+#                         # post-process potential spans
+#                         anno, added_spans = utils.post_process_span(
+#                             start=start, end=end, text=text, counter=anno_counter
+#                         )
+#                         if anno != "":
+#                             print(f"added anno at end of file: {anno}")
+#                             brat_anno += anno
+#                             anno_counter += added_spans
+#                     else:
+#                         pass
+#                 # sometimes, however, a relevant entity starts with I
+#                 # (make sure that there was no other annotation beforehand)
+#                 elif pred == "I-Drug" and previous_pred in ("O", ""):
+#                     start = token_start
+
+#                 elif pred == "I-Drug" and previous_pred == "B-Drug":
+#                     pass
+
+#                 # we only add a brat string if we reach another O entity
+#                 elif pred == "O" and previous_pred in ("B-Drug", "I-Drug"):
+#                     end = previous_token_end
+#                     if start == end and start != 0:
+#                         assert (
+#                             False
+#                         ), f"token_counter: {token_counter}, pred: {pred}, token: {token} --> prev pred: {previous_pred}"
+
+#                     # if the start ID is the same as the end ID, we ignore this span
+#                     if start == end or end < start:
+#                         previous_pred = pred
+#                         continue
+#                     # post-process potential spans
+#                     anno, added_spans = utils.post_process_span(
+#                         start=start, end=end, text=text, counter=anno_counter
+#                     )
+#                     if anno != "":
+#                         print(f"added new anno: {anno}")
+#                         brat_anno += anno
+#                         anno_counter += added_spans
+
+#                 # the first iteration: we do not have a previous pred
+#                 elif pred == "O" and previous_pred in ("", "O"):
+#                     pass
+#                 else:
+#                     assert (
+#                         False
+#                     ), f"EDGE CASE, please check: i: {i}, pred: {pred}, char: '{char}', start: {start}, end: {end} --> prev pred: {previous_pred}"
+
+#                 previous_pred = pred
+#                 token_counter += 1
+
+#             if start != end and end == len(text) - 1:
+#                 anno, added_spans = utils.post_process_span(
+#                     start=start, end=end, text=text, counter=anno_counter
+#                 )
+#                 if anno != "":
+#                     brat_anno += anno
+#                     anno_counter += added_spans
+
+#         path = os.path.join(output_dir, f"{txt_file}.ann")
+
+#         with open(path, "w") as write_handle:
+#             if brat_anno != "":
+#                 write_handle.write(brat_anno)
+#             else:
+#                 pass
+
+
+def convert_documents_to_brat_2(
+    predictions,
+    tokens,
+    txt_files,
+    data_url,
+    output_dir,
+    test_data_identifier,
+    token_offsets_per_file,
 ):
     """Convert every given document to a brat file."""
+
     # convert the predictions per document back to brat documents
     print("\nConverting documents to brat ...\n")
-    for prediction, tokens, txt_file in zip(predictions, tokens, txt_files):
+    for prediction, token_list, txt_file in zip(predictions, tokens, txt_files):
 
-        assert len(tokens) == len(prediction)
+        assert len(token_list) == len(prediction)
 
         print(f"Current text file: {txt_file}")
         # path_to_text = os.path.join(data_url, "dev", txt_file + ".txt")
@@ -199,7 +298,7 @@ def convert_documents_to_brat(
 
         # returns a list of annotation strings
         brat_anno, bio_str = convert(
-            text_file=path_to_text, model_predictions=prediction, tokens=tokens
+            text_file=path_to_text, model_predictions=prediction, tokens=token_list
         )
 
         file_name = os.path.basename(txt_file).split(".txt")[0]
@@ -221,67 +320,12 @@ def convert_documents_to_brat(
 if __name__ == "__main__":
 
     checkpoint_dirs = [
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/all_on_all/final_models_all_on_all/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_17_46",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/all_on_all/final_models_all_on_all/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_17_50",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/all_on_all/final_models_all_on_all/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_19_13",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/all_on_all/final_models_all_on_all/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_22_19_15",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/all_on_all/final_models_all_on_all/netscratch/raithel/projects/cross_ling_drug_detection/models/checkpoint_xlm-roberta-base_22_12_23_14_40",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_en/mono_en_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_15_33",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_en/mono_en_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_15_52",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_en/mono_en_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_10",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_en/mono_en_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_24",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_en/mono_en_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_42",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_de/mono_de_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_13_56",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_de/mono_de_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_16_10",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_de/mono_de_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_17_47",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_de/mono_de_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_19_12",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_de/mono_de_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_20_59",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_fr/mono_fr_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_39",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_f/rmono_fr_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_51",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_fr/mono_fr_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_07",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_fr/mono_fr_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_18",
-        # "/home/lisa/projects/cross_ling_drug_ner/models_final/mono_ling_fr/mono_fr_models/netscratch/raithel/projects/cross_ling_drug_detection/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_32",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_13_56",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_16_10",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_17_47",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_19_12",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/de/checkpoint_xlm-roberta-base_22_12_24_20_59",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_17_46",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_17_50",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_19_13",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_22_19_15",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/all_on_all/checkpoint_xlm-roberta-base_22_12_23_14_40",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_32",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_18",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_07",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_51",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_39"
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/de_en/checkpoint_xlm-roberta-base_22_12_26_17_54",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/de_en/checkpoint_xlm-roberta-base_22_12_26_17_19",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/de_en/checkpoint_xlm-roberta-base_22_12_26_16_28",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/de_en/checkpoint_xlm-roberta-base_22_12_26_15_42",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/de_en/checkpoint_xlm-roberta-base_22_12_26_21_10"
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/es_fr/checkpoint_xlm-roberta-base_22_12_26_14_31",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/es_fr/checkpoint_xlm-roberta-base_22_12_26_17_34",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/es_fr/checkpoint_xlm-roberta-base_22_12_26_13_47",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/es_fr/checkpoint_xlm-roberta-base_22_12_26_13_06",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/clusters/es_fr/checkpoint_xlm-roberta-base_22_12_26_12_59"
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_32",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_18",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_13_07",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_51",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/fr/checkpoint_xlm-roberta-base_22_12_24_12_39"
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_42",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_24",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_16_10",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_15_52",
-        # "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/en/checkpoint_xlm-roberta-base_22_12_24_15_33"
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/es/checkpoint_xlm-roberta-base_22_12_24_16_41",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/es/checkpoint_xlm-roberta-base_22_12_24_16_23",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/es/checkpoint_xlm-roberta-base_22_12_24_16_11",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/es/checkpoint_xlm-roberta-base_22_12_24_15_48",
-        "/netscratch/raithel/projects/cross_ling_drug_ner/models/by_language/es/checkpoint_xlm-roberta-base_22_12_24_15_31"
- ]
+        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/fixed_data/by_language/fr/checkpoint_xlm-roberta-base_23_01_17_19_03",
+        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/fixed_data/by_language/fr/checkpoint_xlm-roberta-base_23_01_17_19_28",
+        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/fixed_data/by_language/fr/checkpoint_xlm-roberta-base_23_01_17_19_54",
+        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/fixed_data/by_language/fr/checkpoint_xlm-roberta-base_23_01_17_20_17",
+        "/home/lisa/projects/cross_ling_drug_ner/models_ensembled/fixed_data/by_language/fr/checkpoint_xlm-roberta-base_23_01_17_20_35",
+    ]
 
     for no, checkpoint_dir in enumerate(checkpoint_dirs):
 
@@ -366,11 +410,12 @@ if __name__ == "__main__":
         if not os.path.exists(output_dir_wosm):
             os.makedirs(output_dir_wosm)
 
-        convert_documents_to_brat(
+        convert_documents_to_brat_2(
             predictions=combined_predictions,
             tokens=combined_tokens,
             txt_files=txt_files,
             data_url=drug_ner.data_url,
             output_dir=output_dir_wosm,
             test_data_identifier=drug_ner.config["test"],
+            token_offsets_per_file=drug_ner.token_offsets_per_file["test"],
         )

@@ -124,55 +124,28 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
 
             # verify that the text matches the original
             if reftext.lower()[ri : ri + len(tokentext)] != tokentext.lower():
+                reftext_window = reftext[ri : ri + len(tokentext)]
                 print(
-                    f"WARNING: text mismatch: reference '{reftext.lower()[ri : ri + len(tokentext) + 20].encode('UTF-8')}' tagged '{tokentext.lower().encode('UTF-8')}'"
+                    f"WARNING: text mismatch: reference '{reftext.lower()[ri : ri + len(tokentext)].encode('UTF-8')}' tagged "
+                    f"'{tokentext.lower().encode('UTF-8')}'"
                 )
-                normalized_ref = unicodedata.normalize(
-                    "NFKD", reftext[ri : ri + len(tokentext)]
-                )
+                normalized_ref = unicodedata.normalize("NFKD", reftext_window)
                 normalized_tokentext = unicodedata.normalize("NFKD", tokentext)
-                # if the normalized versions do not correspond, raise an error
 
+                # assert len(normalized_ref) == len(
+                #     normalized_tokentext
+                # ), "lengths do not match"
+
+                # if the normalized versions do not correspond, raise an error
                 if normalized_ref != normalized_tokentext:
 
                     # try another hack, strings might be including each other
                     if len(normalized_ref) >= len(normalized_tokentext):
-                        start_of_tokentext = normalized_ref.find(normalized_tokentext)
+                        start_of_tokentext = reftext_window.find(normalized_tokentext)
                         ri = start_of_tokentext
                     else:
                         start_of_ref = normalized_tokentext.find(normalized_ref)
                         ri = start_of_ref
-
-                    # assert (
-                    #     False
-                    # ), f"WARNING: text mismatch: reference '{normalized_ref}' tagged '{normalized_tokentext}'"
-
-                    # # continue
-                    # # assert False, "text mismatch"
-                    # # find position of tokentext in reftext -- if it is not
-                    # # too far away, skip to it, i.e. increase ri
-                    # current_ref = reftext[ri : ri + len(tokentext) + 20]
-                    # start_current_ref = reftext.find(current_ref)
-                    # # print(f"start current ref: {start_current_ref}")
-                    # # find occurrence of token text in window
-                    # window_size = 400
-                    # new_ri = -1
-                    # while new_ri == -1:
-                    #     # print(f"window size: {window_size}")
-                    #     if window_size <= 0:
-                    #         break
-                    #     new_ri = reftext.find(
-                    #         tokentext, start_current_ref + window_size
-                    #     )
-                    #     # print(f"new_ri: {new_ri}")
-                    #     # decrease the window size if the
-                    #     window_size -= 50
-
-                    # # print(f"UPDATING ri: {new_ri}")
-                    # # update the current ri
-                    # if new_ri != -1:
-                    #     ri = new_ri
-                    # print(f"appending {(ri, ri + len(tokentext), ttag, ttype)}")
 
             # store tagged token as (begin, end, tag, tagtype) tuple.
             taggedTokens.append((ri, ri + len(tokentext), ttag, ttype))
@@ -191,16 +164,10 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
         len([c for c in reftext[ri:] if not c.isspace()]) != 0
         or len([c for c in BIOlines[bi:] if not re.match(r"^\s*$", c)]) != 0
     ):
-        # assert (
-        #     False
-        # ), "ERROR: failed alignment: '%s' remains in reference, " "'%s' in tagged" % (
-        #     reftext[ri:],
-        #     BIOlines[bi:],
-        # )
+
         print(
             f"ERROR: failed alignment: '{reftext[ri:]}' remains in reference, '{BIOlines[bi:]}' in tagged"
         )
-        # assert False, "failed alignment"
 
     standoff_entities = []
 
@@ -224,6 +191,13 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
         if prevTag in ("B", "I") and ttag == "I" and prevType != ttype:
             print('Note: rewriting "I" -> "B" at type switch', file=sys.stderr)
             ttag = "B"
+        if prevTag is None and ttag == "I" and prevType != ttype:
+            print(
+                '´Note: rewriting "I" -> "B" at beginning of sequence',
+                file=sys.stderr,
+            )
+            ttag = "B"
+
         revisedTagged.append((startoff, endoff, ttag, ttype))
         prevTag, prevType = ttag, ttype
     taggedTokens = revisedTagged
@@ -232,11 +206,19 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
     currType, currStart = None, None
 
     for startoff, endoff, ttag, ttype in taggedTokens:
+        # print(f"startoff: {startoff}, endoff: {endoff}, ttag: {ttag}, ttype: {ttype}")
 
         if prevTag != "O" and ttag != "I":
+            # print(
+            #     f"prevTag: {prevTag}, ttag: {ttag}\ncurrType: {currType}, currStart: {currStart}"
+            # )
             # previous entity does not continue into this tag; output
-            assert currType is not None and currStart is not None, "ERROR in %s" % fn
-
+            # if currType is not None and currStart is not None:
+            #     currType, currStart = None, None
+            #     continue
+            assert (
+                currType is not None and currStart is not None
+            ), f"ERROR: currType: {currType}, currStart: {currStart}"
             # In case there is a new line in the entity, that probably means
             # that these are two separate entities. Split them, and add them
             # separately
@@ -255,15 +237,6 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
                         )
 
                         if len(reftext[currStart:prevEnd]) > 2:
-                            # print("\nWEIRD entitiy")
-                            # print(
-                            #     currStart,
-                            #     prevEnd,
-                            #     currType,
-                            #     next_free_id_idx,
-                            #     reftext[currStart:prevEnd],
-                            # )
-                            # print("~~~~~~~~~~~\n")
 
                             standoff_entities.append(tg)
 
@@ -306,22 +279,13 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
                 )
                 currStart = currStart + num_beginning
 
-            else:
-                if len(reftext[currStart:prevEnd]) > 2:
-                    #     print("\nWEIRD entitiy")
-                    #     print(
-                    #         currStart,
-                    #         prevEnd,
-                    #         currType,
-                    #         next_free_id_idx,
-                    #         reftext[currStart:prevEnd],
-                    #     )
-                    #     print("~~~~~~~~~~~\n")
-                    standoff_entities.append(
-                        taggedEntity(
-                            currStart, prevEnd, currType, next_free_id_idx, reftext
-                        )
+            if len(reftext[currStart:prevEnd]) > 2:
+
+                standoff_entities.append(
+                    taggedEntity(
+                        currStart, prevEnd, currType, next_free_id_idx, reftext
                     )
+                )
 
                 next_free_id_idx += 1
 
@@ -329,7 +293,7 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
             currType, currStart = None, None
 
         elif prevTag != "O":
-            # previous entity continues ; just check sanity
+            # previous entity continues ; just check sanity and don't reset entity
             assert ttag == "I", "ERROR in %s" % fn
             assert (
                 currType == ttype
@@ -348,15 +312,7 @@ def BIO_lines_to_standoff(BIOlines, reftext, tokenidx=2, tagidx=-1):
     # we need to output it separately
     if prevTag != "O":
         if len(reftext[currStart:prevEnd]) > 2:
-            # print("\nWEIRD entitiy")
-            # print(
-            #     currStart,
-            #     prevEnd,
-            #     currType,
-            #     next_free_id_idx,
-            #     reftext[currStart:prevEnd],
-            # )
-            # print("~~~~~~~~~~~\n")
+
             standoff_entities.append(
                 taggedEntity(currStart, prevEnd, currType, next_free_id_idx, reftext)
             )

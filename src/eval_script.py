@@ -22,6 +22,22 @@ from copy import deepcopy
 
 index = {"Action": 0, "Negation": 1, "Temporality": 2, "Certainty": 3, "Actor": 4}
 
+TAG_LIST = [
+    "NoDisposition",
+    "Disposition",
+    "Undetermined",
+    "Substance",
+    "Medication",
+    "MEDICATION",
+    "substance",  # seems to be not really related to medication
+    "CHEM",
+    "Drug",
+    "NO_NORMALIZABLES",  # make sure NO_NORMALIZABLES is listed before NORMALIZABLES
+    "NORMALIZABLES",
+]
+
+CURRENTLY_RELEVANT_TAGS = ["Drug"]
+
 
 class ClinicalConcept(object):
     """Named Entity Tag class."""
@@ -139,20 +155,10 @@ class RecordTrack1(object):
                         print(self.path)
                         print(line)
 
-                    if mode == "gold" and tag_type not in [
-                        "NoDisposition",
-                        "Disposition",
-                        "Undetermined",
-                        "Substance",
-                        "Medication",
-                        "MEDICATION",
-                        "substance",
-                        "CHEM",
-                        "NORMALIZABLES",
-                        "NO_NORMALIZABLES",
-                        "Drug",
-                    ]:
+                    # ignore all tags that are  not in the tag list
+                    if mode == "gold" and tag_type not in TAG_LIST:
                         continue
+                    # "convert" those in the tag list to "Drug"
                     elif mode == "gold":
                         tag_type = "Drug"
 
@@ -414,14 +420,9 @@ class MultipleEvaluator(object):
                 "micro": {"precision": 0, "recall": 0, "f1": 0},
             },
         }
-        self.tags = (
-            "Drug",
-            "Disposition",
-            "NoDisposition",
-            "Undetermined",
-            "Substance",
-            "substance",
-        )
+        # self.tags = TAG_LIST
+        self.tags = CURRENTLY_RELEVANT_TAGS
+
         self.attributes = (
             "Action",
             "Temporality",
@@ -502,20 +503,7 @@ class Corpora(object):
             # print(file)
             g = RecordTrack1(os.path.join(self.folder1, file), mode="gold")
 
-            # print("\nGOLD:")
-            # for k, v in g.annotations["tags"].items():
-            #     print(f"k: {k}\t{v.ttype}")
-
-            # print("\n\n")
-
-            # print("\nPRED:")
-
             s = RecordTrack1(os.path.join(self.folder2, file), mode="pred")
-
-            # for k, v in s.annotations["tags"].items():
-            #     print(f"k: {k}\t{v.ttype}")
-
-            # print("\n\n")
 
             self.docs.append((g, s))
             # break
@@ -540,14 +528,16 @@ def evaluate(corpora, mode="strict", verbose=False):
     )
     s_macro_precision, s_macro_recall, s_macro_f1 = [], [], []
     l_macro_precision, l_macro_recall, l_macro_f1 = [], [], []
-    for tag in ["Drug"]:
+    # for tag in TAG_LIST:
+    for tag in CURRENTLY_RELEVANT_TAGS:
         evaluator_tag_s = MultipleEvaluator(corpora, tag, verbose=verbose)
         evaluator_tag_l = MultipleEvaluator(
             corpora, tag, mode="lenient", verbose=verbose
         )
         print(
             "{:>20}  {:<5.4f}  {:<5.4f}  {:<5.4f}    {:<5.4f}  {:<5.4f}  {:<5.4f}".format(
-                tag.capitalize(),
+                # tag.capitalize(),
+                tag,
                 evaluator_tag_s.scores["tags"]["micro"]["precision"],
                 evaluator_tag_s.scores["tags"]["micro"]["recall"],
                 evaluator_tag_s.scores["tags"]["micro"]["f1"],
@@ -567,14 +557,15 @@ def evaluate(corpora, mode="strict", verbose=False):
     )
     s_macro_precision, s_macro_recall, s_macro_f1 = [], [], []
     l_macro_precision, l_macro_recall, l_macro_f1 = [], [], []
-    for tag in ["Disposition", "NoDisposition", "Undetermined"]:
+    for tag in CURRENTLY_RELEVANT_TAGS:
         evaluator_tag_s = MultipleEvaluator(corpora, tag, verbose=verbose)
         evaluator_tag_l = MultipleEvaluator(
             corpora, tag, mode="lenient", verbose=verbose
         )
         print(
             "{:>20}  {:<5.4f}  {:<5.4f}  {:<5.4f}    {:<5.4f}  {:<5.4f}  {:<5.4f}".format(
-                tag.capitalize(),
+                # tag.capitalize(),
+                tag,
                 evaluator_tag_s.scores["tags"]["micro"]["precision"],
                 evaluator_tag_s.scores["tags"]["micro"]["recall"],
                 evaluator_tag_s.scores["tags"]["micro"]["f1"],

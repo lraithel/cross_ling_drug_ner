@@ -100,6 +100,7 @@ class Brat(datasets.GeneratorBasedBuilder):
                             names_file="src/utils/entities.txt"
                         )
                     ),
+                    "token_offsets": datasets.Sequence(Sequence(Value("int32"))),
                     "tokens_per_sentence": Sequence(Sequence(Value("string"))),
                     "tags_per_sentence": Sequence(Sequence(Value("string"))),
                     "token_labels_per_sentence": Sequence(Sequence(Value("string"))),
@@ -390,7 +391,7 @@ class Brat(datasets.GeneratorBasedBuilder):
                 "tagset",
             ],
         )
-        options.char_offsets = False
+        options.char_offsets = True
         options.asciify = False
         options.singletype = None
         options.discont_rule = "full-span"
@@ -443,7 +444,7 @@ class Brat(datasets.GeneratorBasedBuilder):
             annotations["context"] = txt_content
 
             # split the conll string to lines, i.e. one line looks like this:
-            # "token \t tag"
+            # "token \t tag" or "token \t start \t end \t tag"
             lines = content_str.split("\n")
             # remove the file name
             file_name = lines.pop(0).strip()
@@ -453,6 +454,7 @@ class Brat(datasets.GeneratorBasedBuilder):
             annotations["tokens_per_sentence"] = []
             annotations["tags_per_sentence"] = []
             annotations["token_labels_per_sentence"] = []
+            annotations["token_offsets"] = []
 
             tokens_per_sent = []
             tags_per_sent = []
@@ -461,8 +463,9 @@ class Brat(datasets.GeneratorBasedBuilder):
             for j, line in enumerate(lines):
 
                 if line:
-                    token, tag = line.split("\t")
+                    token, start, end, tag = line.split("\t")
                     annotations["tokens"].append(token)
+                    annotations["token_offsets"].append((int(start), int(end)))
                     tokens_per_sent.append(token)
 
                     # add the non-unified tag

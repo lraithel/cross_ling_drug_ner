@@ -20,7 +20,25 @@ import statistics
 from collections import defaultdict
 from copy import deepcopy
 
+import pandas as pd
+
 index = {"Action": 0, "Negation": 1, "Temporality": 2, "Certainty": 3, "Actor": 4}
+
+TAG_LIST = [
+    "NoDisposition",
+    "Disposition",
+    "Undetermined",
+    "Substance",
+    "Medication",
+    "MEDICATION",
+    "substance",  # seems to be not really related to medication
+    "CHEM",
+    "Drug",
+    "NO_NORMALIZABLES",  # make sure NO_NORMALIZABLES is listed before NORMALIZABLES
+    "NORMALIZABLES",
+]
+
+CURRENTLY_RELEVANT_TAGS = ["Drug"]
 
 
 class ClinicalConcept(object):
@@ -139,19 +157,7 @@ class RecordTrack1(object):
                         print(self.path)
                         print(line)
 
-                    if mode == "gold" and tag_type not in [
-                        "NoDisposition",
-                        "Disposition",
-                        "Undetermined",
-                        "Substance",
-                        "Medication",
-                        "MEDICATION",
-                        "substance",
-                        "CHEM",
-                        "NORMALIZABLES",
-                        "NO_NORMALIZABLES",
-                        "Drug",
-                    ]:
+                    if mode == "gold" and tag_type not in TAG_LIST:
                         continue
                     elif mode == "gold":
                         tag_type = "Drug"
@@ -273,6 +279,107 @@ class Measures(object):
 class SingleEvaluator(object):
     """Evaluate two single files."""
 
+    def __init__(self, doc1, doc2, track, mode="strict", key=None, verbose=False):
+        """Initialize."""
+        assert isinstance(doc1, RecordTrack1)
+        assert isinstance(doc2, RecordTrack1)
+        assert mode in ("strict", "lenient")
+        assert doc1.basename == doc2.basename
+        self.inspection_data = {}
+
+        self.inspection_data["file"] = doc1.basename
+        self.scores = {
+            "tags": {"tp": 0, "fp": 0, "fn": 0, "tn": 0},
+            "attributes": {"tp": 0, "fp": 0, "fn": 0, "tn": 0},
+        }
+        self.doc1 = doc1
+        self.doc2 = doc2
+        if key:
+            gol = [t for t in doc1.tags.values() if t.ttype == key]
+            sys = [t for t in doc2.tags.values() if t.ttype == key]
+        else:
+            gol = [t for t in doc1.tags.values() if t.ttype != "Drug"]
+            sys = [t for t in doc2.tags.values() if t.ttype != "Drug"]
+
+        sys_check_tag = self._remove_duplicate_tags(sys)
+        gol_check_tag = self._remove_duplicate_tags(gol)
+
+        # now evaluate
+        # self.scores['tags']['tp'] = len({g.tid for g in gol_check_tag for s in sys_check_tag if g.equals(s, mode)})
+        self.scores["tags"]["tp"] = self._get_tp(sys_check_tag, gol_check_tag, mode)
+        self.scores["tags"]["fp"] = max(
+            len({s.rid for s in sys_check_tag}) - self.scores["tags"]["tp"], 0
+        )
+        self.scores["tags"]["fn"] = max(
+            len({g.rid for g in gol_check_tag}) - self.scores["tags"]["tp"], 0
+        )
+        self.scores["tags"]["tn"] = 0
+
+        # if verbose and track == 1:
+        if track == 1:
+
+            tps = {s for s in sys for g in gol if g.equals(s, mode)}
+            true_positives = [(tp.text, tp.start, tp.end) for tp in tps]
+
+            fps = set(sys) - tps
+            false_positives = [(fp.text, fp.start, fp.end) for fp in fps]
+
+            fns = set()
+            for g in gol:
+                if not len([s for s in sys if s.equals(g, mode)]):
+                    fns.add(g)
+
+            false_negatives = [(fn.text, fn.start, fn.end) for fn in fns]
+
+            # for e in fps:
+            #     print("FP: " + str(e))
+            # for e in fns:
+            #     print("FN:" + str(e))
+
+        # print(f"true positives: {true_positives}")
+        # print(f"false positives (found by system, but not in gold): {false_positives}")
+        # print(f"false negatives (not found by system): {false_negatives}")
+
+        self.inspection_data["TP"] = true_positives
+        self.inspection_data["#TP"] = len(true_positives)
+        self.inspection_data["#gold_entities"] = len(gol_check_tag)
+
+        self.inspection_data["FP"] = false_positives
+        self.inspection_data["#FP"] = len(false_positives)
+
+        self.inspection_data["FN"] = false_negatives
+        self.inspection_data["#FN"] = len(false_negatives)
+
+        if track == 1:
+            if key:
+                gol = [r for r in doc1.attributes.values() if r.rtype == key]
+                sys = [r for r in doc2.attributes.values() if r.rtype == key]
+            else:
+                gol = [r for r in doc1.attributes.values() if r.rtype != "Combined"]
+                sys = [r for r in doc2.attributes.values() if r.rtype != "Combined"]
+
+            # now evaluate
+            # self.scores['attributes']['tp'] = len({g.rid for g in gol for s in sys if g.equals(s, mode)})
+            self.scores["attributes"]["tp"] = self._get_tp(sys, gol, mode)
+            self.scores["attributes"]["fp"] = max(
+                (len({s.rid for s in sys}) - self.scores["attributes"]["tp"]), 0
+            )
+            self.scores["attributes"]["fn"] = max(
+                (len({g.rid for g in gol}) - self.scores["attributes"]["tp"]), 0
+            )
+            self.scores["attributes"]["tn"] = 0
+            if verbose:
+                tps = {s for s in sys for g in gol if g.equals(s, mode)}
+                fps = set(sys) - tps
+                fns = set()
+                for g in gol:
+                    if not len([s for s in sys if s.equals(g, mode)]):
+                        fns.add(g)
+                for e in fps:
+                    print("FP: " + str(e))
+                for e in fns:
+                    print("FN:" + str(e))
+
     def _remove_duplicate_tags(self, tags):
         skip_indices = set()
         dedup_tags = []
@@ -312,79 +419,6 @@ class SingleEvaluator(object):
 
         # len({g.rid for g in gol for s in sys if g.equals(s, mode)})
 
-    def __init__(self, doc1, doc2, track, mode="strict", key=None, verbose=False):
-        """Initialize."""
-        assert isinstance(doc1, RecordTrack1)
-        assert isinstance(doc2, RecordTrack1)
-        assert mode in ("strict", "lenient")
-        assert doc1.basename == doc2.basename
-        self.scores = {
-            "tags": {"tp": 0, "fp": 0, "fn": 0, "tn": 0},
-            "attributes": {"tp": 0, "fp": 0, "fn": 0, "tn": 0},
-        }
-        self.doc1 = doc1
-        self.doc2 = doc2
-        if key:
-            gol = [t for t in doc1.tags.values() if t.ttype == key]
-            sys = [t for t in doc2.tags.values() if t.ttype == key]
-        else:
-            gol = [t for t in doc1.tags.values() if t.ttype != "Drug"]
-            sys = [t for t in doc2.tags.values() if t.ttype != "Drug"]
-
-        sys_check_tag = self._remove_duplicate_tags(sys)
-        gol_check_tag = self._remove_duplicate_tags(gol)
-        # now evaluate
-        # self.scores['tags']['tp'] = len({g.tid for g in gol_check_tag for s in sys_check_tag if g.equals(s, mode)})
-        self.scores["tags"]["tp"] = self._get_tp(sys_check_tag, gol_check_tag, mode)
-        self.scores["tags"]["fp"] = max(
-            len({s.rid for s in sys_check_tag}) - self.scores["tags"]["tp"], 0
-        )
-        self.scores["tags"]["fn"] = max(
-            len({g.rid for g in gol_check_tag}) - self.scores["tags"]["tp"], 0
-        )
-        self.scores["tags"]["tn"] = 0
-
-        if verbose and track == 1:
-            tps = {s for s in sys for g in gol if g.equals(s, mode)}
-            fps = set(sys) - tps
-            fns = set()
-            for g in gol:
-                if not len([s for s in sys if s.equals(g, mode)]):
-                    fns.add(g)
-            for e in fps:
-                print("FP: " + str(e))
-            for e in fns:
-                print("FN:" + str(e))
-        if track == 1:
-            if key:
-                gol = [r for r in doc1.attributes.values() if r.rtype == key]
-                sys = [r for r in doc2.attributes.values() if r.rtype == key]
-            else:
-                gol = [r for r in doc1.attributes.values() if r.rtype != "Combined"]
-                sys = [r for r in doc2.attributes.values() if r.rtype != "Combined"]
-
-            # now evaluate
-            # self.scores['attributes']['tp'] = len({g.rid for g in gol for s in sys if g.equals(s, mode)})
-            self.scores["attributes"]["tp"] = self._get_tp(sys, gol, mode)
-            self.scores["attributes"]["fp"] = max(
-                (len({s.rid for s in sys}) - self.scores["attributes"]["tp"]), 0
-            )
-            self.scores["attributes"]["fn"] = max(
-                (len({g.rid for g in gol}) - self.scores["attributes"]["tp"]), 0
-            )
-            self.scores["attributes"]["tn"] = 0
-            if verbose:
-                tps = {s for s in sys for g in gol if g.equals(s, mode)}
-                fps = set(sys) - tps
-                fns = set()
-                for g in gol:
-                    if not len([s for s in sys if s.equals(g, mode)]):
-                        fns.add(g)
-                for e in fps:
-                    print("FP: " + str(e))
-                for e in fns:
-                    print("FN:" + str(e))
-
 
 class MultipleEvaluator(object):
     """Evaluate two sets of files."""
@@ -394,6 +428,8 @@ class MultipleEvaluator(object):
         assert isinstance(corpora, Corpora)
         assert mode in ("strict", "lenient")
         self.scores = None
+        self.inspections = []
+
         self.track1(corpora, tag_type, mode, verbose)
 
     def track1(self, corpora, tag_type=None, mode="strict", verbose=False):
@@ -414,14 +450,7 @@ class MultipleEvaluator(object):
                 "micro": {"precision": 0, "recall": 0, "f1": 0},
             },
         }
-        self.tags = (
-            "Drug",
-            "Disposition",
-            "NoDisposition",
-            "Undetermined",
-            "Substance",
-            "substance",
-        )
+        self.tags = CURRENTLY_RELEVANT_TAGS
         self.attributes = (
             "Action",
             "Temporality",
@@ -441,6 +470,17 @@ class MultipleEvaluator(object):
                     fn=evaluator.scores[target]["fn"],
                     tn=evaluator.scores[target]["tn"],
                 )
+                if target == "tags":
+                    evaluator.inspection_data.update(
+                        {
+                            "prec": getattr(measures, "precision")(),
+                            "rec": getattr(measures, "recall")(),
+                            "F1": getattr(measures, "f1")(),
+                        }
+                    )
+
+            self.inspections.append(evaluator.inspection_data)
+
         for target in ("tags", "attributes"):
             measures = Measures(
                 tp=self.scores[target]["tp"],
@@ -454,16 +494,38 @@ class MultipleEvaluator(object):
 
 
 class Corpora(object):
-    def __init__(self, folder1, folder2):
+    def __init__(self, folder1, folder2, language="all"):
         file_ext = "*.ann"
         self.folder1 = folder1
         self.folder2 = folder2
-        files1 = set(
-            [os.path.basename(f) for f in glob.glob(os.path.join(folder1, file_ext))]
-        )
-        files2 = set(
-            [os.path.basename(f) for f in glob.glob(os.path.join(folder2, file_ext))]
-        )
+        if language == "all":
+            files1 = set(
+                [
+                    os.path.basename(f)
+                    for f in glob.glob(os.path.join(folder1, file_ext))
+                ]
+            )
+            files2 = set(
+                [
+                    os.path.basename(f)
+                    for f in glob.glob(os.path.join(folder2, file_ext))
+                ]
+            )
+        else:
+            files1 = set(
+                [
+                    os.path.basename(f)
+                    for f in glob.glob(os.path.join(folder1, file_ext))
+                    if os.path.basename(f).startswith(language)
+                ]
+            )
+            files2 = set(
+                [
+                    os.path.basename(f)
+                    for f in glob.glob(os.path.join(folder2, file_ext))
+                    if os.path.basename(f).startswith(language)
+                ]
+            )
 
         common_files = files1 & files2  # intersection
         if not common_files:
@@ -524,7 +586,7 @@ def evaluate(corpora, mode="strict", verbose=False):
             corpora, tag, mode="lenient", verbose=verbose
         )
         print(
-            "{:>20}  {:<5.4f}  {:<5.4f}  {:<5.4f}    {:<5.4f}  {:<5.4f}  {:<5.4f}".format(
+            "{:>20}\t{:<5.4f}\t{:<5.4f}\t{:<5.4f}\t{:<5.4f}\t{:<5.4f}\t{:<5.4f}".format(
                 tag.capitalize(),
                 evaluator_tag_s.scores["tags"]["micro"]["precision"],
                 evaluator_tag_s.scores["tags"]["micro"]["recall"],
@@ -543,6 +605,13 @@ def evaluate(corpora, mode="strict", verbose=False):
             "", "Prec.", "Rec.", "F(b=1)", "Prec.", "Rec.", "F(b=1)"
         )
     )
+
+    strict_dataframe = pd.DataFrame(evaluator_tag_s.inspections)
+    lenient_dataframe = pd.DataFrame(evaluator_tag_l.inspections)
+
+    return strict_dataframe, lenient_dataframe
+
+    # ignore all below
     s_macro_precision, s_macro_recall, s_macro_f1 = [], [], []
     l_macro_precision, l_macro_recall, l_macro_f1 = [], [], []
     for tag in ["Disposition", "NoDisposition", "Undetermined"]:
@@ -685,15 +754,23 @@ def evaluate(corpora, mode="strict", verbose=False):
     print("{:20}{:^48}".format("", "  {} files evaluated  ".format(len(corpora.docs))))
 
 
-def main(f1, f2, verbose):
-    corpora = Corpora(f1, f2)
+def main(f1, f2, verbose, language="all"):
+    corpora = Corpora(f1, f2, language=language)
     if corpora.docs:
-        evaluate(corpora, verbose=verbose)
+        return evaluate(corpora, verbose=verbose)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="n2c2: Evaluation script for Track 1")
     parser.add_argument("folder1", help="First data folder path (gold)")
     parser.add_argument("folder2", help="Second data folder path (system)")
+    parser.add_argument(
+        "language", type=str, help="Choose one out of [all, de, en, fr, es]"
+    )
     args = parser.parse_args()
-    main(os.path.abspath(args.folder1), os.path.abspath(args.folder2), False)
+    main(
+        f1=os.path.abspath(args.folder1),
+        f2=os.path.abspath(args.folder2),
+        verbose=False,
+        language=args.language,
+    )
